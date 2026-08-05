@@ -1,0 +1,108 @@
+name: Browser Render Smoke
+
+on:
+  push:
+    branches: [fix/frontend-render-real-browser, main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  validate-browser-render:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      WEB_URL: https://predix-farmacia-virtual.onrender.com
+      LEGACY_URL: https://qylqyhxpwffiripcpjej.supabase.co/functions/v1/predix-farmacia
+      API_HEALTH: https://qylqyhxpwffiripcpjej.supabase.co/functions/v1/predix-api/api/health
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Validate HTTP headers
+        shell: bash
+        run: |
+          set -euo pipefail
+          headers="$(curl --fail --silent --show-error --location --head "$WEB_URL" | tr -d '\r')"
+          printf '%s\n' "$headers"
+          content_type="$(printf '%s\n' "$headers" | awk -F': ' 'tolower($1)=="content-type" {print tolower($2)}' | tail -1)"
+          test -n "$content_type"
+          case "$content_type" in
+            text/html*) ;;
+            *) echo "INVALID_CONTENT_TYPE=$content_type"; exit 1 ;;
+          esac
+
+      - name: Validate legacy redirect
+        shell: bash
+        run: |
+          set -euo pipefail
+          headers="$(curl --silent --show-error --head "$LEGACY_URL" | tr -d '\r')"
+          printf '%s\n' "$headers"
+          status="$(printf '%s\n' "$headers" | awk 'NR==1 {print $2}')"
+          location="$(printf '%s\n' "$headers" | awk -F': ' 'tolower($1)=="location" {print $2}' | tail -1)"
+          case "$status" in
+            301|302|307|308) ;;
+            *) echo "INVALID_LEGACY_STATUS=$status"; exit 1 ;;
+          esac
+          test "$location" = "$WEB_URL"
+          printf 'LEGACY_REDIRECT=PASS\n'
+
+      - name: Validate API health
+        shell: bash
+        run: |
+          set -euo pipefail
+          curl --fail --silent --show-error "$API_HEALTH" > health.json
+          python - <<'PY'
+          import json
+          health = json.load(open('health.json', encoding='utf-8'))
+          assert health['status'] == 'ok', health
+          assert health['products'] == 500, health
+          assert health['database'] == 'supabase-postgres', health
+          print(json.dumps(health, ensure_ascii=False, indent=2))
+          PY
+
+      - name: Render with headless Chrome
+        shell: bash
+        run: |
+          set -euo pipefail
+          browser="$(command -v google-chrome || command -v chromium || command -v chromium-browser || true)"
+          test -n "$browser"
+          "$browser" \
+            --headless \
+            --no-sandbox \
+            --disable-gpu \
+            --hide-scrollbars \
+            --window-size=390,844 \
+            --virtual-time-budget=12000 \
+            --screenshot=predix-mobile.png \
+            "$WEB_URL"
+          "$browser" \
+            --headless \
+            --no-sandbox \
+            --disable-gpu \
+            --virtual-time-budget=12000 \
+            --dump-dom \
+            "$WEB_URL" > rendered.html
+          grep --quiet 'Predix Farmácia Virtual' rendered.html
+          grep --quiet 'PostgreSQL conectado' rendered.html
+          grep --quiet '500 produtos' rendered.html
+          grep --quiet 'FUNCIONÁRIO VIRTUAL' rendered.html
+          if grep --quiet '&lt;!doctype html&gt;' rendered.html; then
+            echo 'RAW_HTML_VISIBLE=true'
+            exit 1
+          fi
+          test -s predix-mobile.png
+          printf 'BROWSER_RENDER=PASS\nMOBILE_SCREENSHOT=PASS\nRAW_HTML_VISIBLE=false\n'
+
+      - name: Upload browser evidence
+        uses: actions/upload-artifact@v4
+        with:
+          name: predix-browser-evidence
+          path: |
+            predix-mobile.png
+            rendered.html
+            health.json
+          if-no-files-found: error
+          retention-days: 30

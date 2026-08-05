@@ -1,76 +1,80 @@
 # Predix Farmácia Virtual
 
-MVP funcional de uma farmácia digital **inteiramente fictícia** para treinamento, testes e validação do primeiro Funcionário Virtual especializado da Predix.
+MVP funcional de uma farmácia digital **inteiramente fictícia** para treinamento e validação do Funcionário Virtual especializado da Predix.
 
 > O sistema não é uma farmácia real, não vende medicamentos, não processa pagamentos ou receitas e não fornece orientação clínica.
 
-## Objetivo validado
+## Acesso público
 
-Demonstrar que um Funcionário Virtual pode atuar como balconista digital consultando dados e regras antes de responder, em vez de funcionar como chatbot genérico.
+- Interface: https://predix-farmacia-virtual.onrender.com
+- Health da API: https://qylqyhxpwffiripcpjej.supabase.co/functions/v1/predix-api/api/health
+
+O endereço Supabase antigo do frontend redireciona para a interface Render.
 
 ## Entregas do MVP
 
 - empresa fictícia identificada como demonstração;
-- seed determinístico com 500 produtos sintéticos;
-- catálogo, preços e estoque;
+- catálogo determinístico com 500 produtos sintéticos;
+- preços e estoque persistidos em PostgreSQL;
 - reservas simuladas com proteção contra estoque negativo;
-- auditoria básica;
-- oito documentos em `treinamento/`;
+- conversas, consultas e auditoria básica;
 - Funcionário Virtual com política de não invenção;
 - encaminhamento de dúvidas clínicas ou sem fonte;
-- interface web com chat, catálogo, reservas e relatórios;
-- testes automatizados e CI.
+- interface pública responsiva;
+- testes locais, smoke remoto e validação em Chrome headless.
 
-## Arquitetura
+## Arquitetura publicada
 
 ```text
-Funcionário Virtual Predix
-        │
-        ├── conhecimento permanente: treinamento/*.md
-        └── dados dinâmicos: SQLite (produtos, preços, estoque e reservas)
+Render Static Site
+        │ HTTPS/CORS
+        ▼
+Supabase Edge API
+        │ service_role
+        ▼
+Supabase PostgreSQL
 ```
 
-O funcionário pertence à Predix. A farmácia fornece apenas treinamento e dados, permitindo reutilizar o mesmo núcleo em outras empresas.
+O Funcionário Virtual pertence à Predix. A farmácia fornece treinamento e dados demonstrativos.
 
-## Executar
+## Segurança
 
-Requisito: Python 3.12 ou superior. Não há dependências externas.
+- tabelas `pfv_*` protegidas por RLS;
+- funções transacionais restritas ao `service_role`;
+- nenhum segredo versionado;
+- área administrativa removida do frontend público;
+- credencial administrativa anteriormente exposta foi invalidada;
+- dados exclusivamente fictícios.
+
+## Validação pública
+
+O workflow `Browser Render Smoke` valida:
+
+- `Content-Type: text/html`;
+- health da API e 500 produtos;
+- execução em Chrome headless;
+- JavaScript carregando dados do PostgreSQL;
+- ausência de HTML bruto visível;
+- screenshot móvel armazenado como artefato.
+
+A trilha da remediação está em `audit/MCF-PFV-DEPLOY-002/`.
+
+## Executar localmente
+
+Requisito: Python 3.12 ou superior.
 
 ```bash
-python app.py
+python3 app.py
 ```
 
 Acesse `http://127.0.0.1:8000`.
 
-Na primeira execução, o banco `data/predix.db` é criado e recebe 500 produtos fictícios.
-
-## Testar
+## Testar o servidor local
 
 ```bash
-python -m unittest -v tests/test_mvp.py
+python3 -m unittest -v tests/test_mvp.py
 ```
 
-## Administração de estoque
+## Limites
 
-Configure uma chave antes de iniciar:
-
-```bash
-PREDIX_ADMIN_KEY='chave-local-forte' python app.py
-```
-
-A atualização administrativa exige o cabeçalho `X-Admin-Key`.
-
-## Endpoints
-
-- `GET /api/health`
-- `GET /api/company`
-- `GET /api/products?query=&page=&pageSize=`
-- `POST /api/chat`
-- `POST /api/reservations` com `Idempotency-Key`
-- `POST /api/reservations/{id}/cancel`
-- `GET /api/reports`
-- `POST /api/admin/inventory/{productId}`
-
-## Limites do MVP
-
-Sem WhatsApp real, pagamentos, receita médica, dados pessoais reais, recomendação de medicamentos ou publicação automática em produção.
+Sem WhatsApp real, pagamentos, receita médica, dados pessoais reais, recomendação de medicamentos ou vendas reais.

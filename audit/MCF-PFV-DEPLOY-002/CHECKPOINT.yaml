@@ -1,0 +1,35 @@
+mission_id: MCF-PFV-DEPLOY-002
+status: CANDIDATE_READY_FOR_REVIEW
+risk_class: B
+human_authority: Leandro
+operational_authority: Léo
+coordinator: Mestre
+branch: fix/frontend-render-real-browser
+base_sha: d5f70a425e50775588c550eb49b416b76c1dc72f
+public_url: https://predix-farmacia-virtual.onrender.com
+legacy_url_behavior: HTTP_302_TO_PUBLIC_URL
+render:
+  service_id: srv-d9pkpvu7bikc739i54u0
+  deploy_id: dep-d9pkq0e7bikc739i55sg
+  status: live
+supabase:
+  project_id: qylqyhxpwffiripcpjej
+  api_function: predix-api
+  legacy_frontend_function_version: 2
+  database: postgres
+  products: 500
+security:
+  exposed_admin_key_invalidated: true
+  new_public_admin_key_created: false
+  public_admin_ui_removed: true
+  rls_enabled: true
+browser_validation:
+  run_id: 31017058315
+  job_id: 92343746550
+  conclusion: success
+  artifact_id: 8934936197
+  raw_html_visible: false
+  mobile_screenshot: true
+audit:
+  emily: PASS_WITH_RECORDED_DEVIATIONS
+next_gate: VINICIUS_PR_REVIEW
