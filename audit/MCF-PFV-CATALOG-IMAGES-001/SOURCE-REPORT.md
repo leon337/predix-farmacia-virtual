@@ -5,14 +5,16 @@
 - Tamanho do dump: `167614987` bytes
 - Produtos distintos: `500`
 - Produtos com imagem verificada: `500`
-- SHA-256 do catálogo: `ef0b6e509b574b14963cffe3879790d40ff0fdeb9d63e3c267f1e4cf0b549a67`
-- Gerado em: `2026-08-05T22:17:59.464246+00:00`
-- Registros examinados: `18571`
-- Registros excluídos como alimento/não beleza: `26`
-- Fabricantes inválidos excluídos: `16`
+- SHA-256 do catálogo: `2e624c9ef6063a7b7283302fa91bda67557d792fc6790d8100983b5d5e5db3bb`
+- Gerado em: `2026-08-05T22:43:33.292128+00:00`
+- Registros examinados: `64237`
+- Registros fora do escopo de cuidados pessoais: `20519`
+- Fabricantes inválidos excluídos: `18`
 - Fonte: `Open Beauty Facts`
 - Identidade: código de barras + nome + marca
+- Escopo exigido: higiene, beleza e cuidados pessoais
+- Medicamentos, alimentos, bebidas e itens domésticos incompatíveis: excluídos
 - Estoque: separado do cadastro e inteiramente simulado
 - Preços: ausentes; nenhum valor inventado
 
-As imagens são URLs frontais de embalagem publicadas pela base aberta. Cada uma respondeu como conteúdo de imagem durante a geração. Alimentos e registros com marca inválida foram rejeitados.
+As imagens são URLs frontais de embalagem publicadas pela base aberta. Cada uma respondeu como conteúdo de imagem durante a geração.
