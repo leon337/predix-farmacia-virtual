@@ -18,6 +18,7 @@ jobs:
       WEB_URL: https://predix-farmacia-virtual.onrender.com
       LEGACY_URL: https://qylqyhxpwffiripcpjej.supabase.co/functions/v1/predix-farmacia
       API_HEALTH: https://qylqyhxpwffiripcpjej.supabase.co/functions/v1/predix-api/api/health
+      API_PRODUCTS: https://qylqyhxpwffiripcpjej.supabase.co/functions/v1/predix-api/api/products?page=1&pageSize=1
     steps:
       - uses: actions/checkout@v4
 
@@ -49,18 +50,31 @@ jobs:
           test "$location" = "$WEB_URL"
           printf 'LEGACY_REDIRECT=PASS\n'
 
-      - name: Validate API health
+      - name: Validate API real catalog
         shell: bash
         run: |
           set -euo pipefail
           curl --fail --silent --show-error "$API_HEALTH" > health.json
+          curl --fail --silent --show-error "$API_PRODUCTS" > product.json
           python - <<'PY'
           import json
+          import re
           health = json.load(open('health.json', encoding='utf-8'))
+          catalog = json.load(open('product.json', encoding='utf-8'))
           assert health['status'] == 'ok', health
           assert health['products'] == 500, health
+          assert health['realProducts'] == 500, health
+          assert health['productsWithoutPrice'] == 500, health
+          assert health['catalogIdentity'] == 'real', health
           assert health['database'] == 'supabase-postgres', health
-          print(json.dumps(health, ensure_ascii=False, indent=2))
+          product = catalog['items'][0]
+          assert product['identityReal'] is True, product
+          assert product['operationsSimulated'] is True, product
+          assert product['anvisaRegistration'], product
+          assert product['priceCents'] is None, product
+          assert product['price'] == 'Consulte o estabelecimento', product
+          assert not re.search(r'Demo\s+\d{3}', product['name'], re.I), product
+          print(json.dumps({'health': health, 'sample': product}, ensure_ascii=False, indent=2))
           PY
 
       - name: Render with headless Chrome
@@ -75,34 +89,40 @@ jobs:
             --disable-gpu \
             --hide-scrollbars \
             --window-size=390,844 \
-            --virtual-time-budget=12000 \
-            --screenshot=predix-mobile.png \
+            --virtual-time-budget=15000 \
+            --screenshot=predix-mobile-real-catalog.png \
             "$WEB_URL"
           "$browser" \
             --headless \
             --no-sandbox \
             --disable-gpu \
-            --virtual-time-budget=12000 \
+            --virtual-time-budget=15000 \
             --dump-dom \
             "$WEB_URL" > rendered.html
           grep --quiet 'Predix Farmácia Virtual' rendered.html
           grep --quiet 'PostgreSQL conectado' rendered.html
-          grep --quiet '500 produtos' rendered.html
+          grep --quiet '500 produtos reais' rendered.html
+          grep --quiet 'CATÁLOGO COM IDENTIDADE REAL' rendered.html
+          grep --quiet 'Registro Anvisa' rendered.html
+          grep --quiet 'Consulte o estabelecimento' rendered.html
           grep --quiet 'FUNCIONÁRIO VIRTUAL' rendered.html
+          ! grep --quiet 'CATÁLOGO SINTÉTICO' rendered.html
+          ! grep -Eqi 'Demo [0-9]{3}|Composto demonstrativo|Predix Labs Simulação|Farma Exemplo Fictícia' rendered.html
           if grep --quiet '&lt;!doctype html&gt;' rendered.html; then
             echo 'RAW_HTML_VISIBLE=true'
             exit 1
           fi
-          test -s predix-mobile.png
-          printf 'BROWSER_RENDER=PASS\nMOBILE_SCREENSHOT=PASS\nRAW_HTML_VISIBLE=false\n'
+          test -s predix-mobile-real-catalog.png
+          printf 'BROWSER_RENDER=PASS\nMOBILE_SCREENSHOT=PASS\nREAL_CATALOG_VISIBLE=true\nRAW_HTML_VISIBLE=false\n'
 
       - name: Upload browser evidence
         uses: actions/upload-artifact@v4
         with:
-          name: predix-browser-evidence
+          name: predix-real-catalog-browser-evidence
           path: |
-            predix-mobile.png
+            predix-mobile-real-catalog.png
             rendered.html
             health.json
+            product.json
           if-no-files-found: error
           retention-days: 30
