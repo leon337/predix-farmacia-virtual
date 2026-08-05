@@ -1,0 +1,49 @@
+mission_id: MCF-PFV-CATALOG-REAL-001
+status: CANDIDATE_AWAITING_BROWSER_DEPLOY
+risk_class: B
+human_authority: Leandro
+operational_authority: Leo
+coordinator: Mestre
+branch: feat/catalogo-real-anvisa
+candidate_sha: 50448a15d13ec3580249c36a7447c69010191124
+catalog:
+  identities_real: 500
+  products_without_price: 500
+  medications_included: false
+  controlled_products_included: false
+  invasive_or_hospital_products_included: false
+  mirror_sha256: d20df633de53a2c79a2efa03ebae61db72fcb7e27941f23993784f179130f173
+  artifact_sha256: 322a842080af74e1cafeea0a98f0ea71a930ac442eadb1d6d9911e15b9b7cf34
+  artifact_commit: be76a92a585158ad0a7a6b91d25b3aee65fa4230
+postgresql:
+  products: 500
+  real_identities: 500
+  prices_missing: 500
+  inventory_rows: 500
+  negative_availability: 0
+api:
+  slug: predix-api
+  version: 3
+  semantic_version: 1.1.1
+  digest: 54801b70043a895976f7bce0ef1b6a446d8dc5635c23946995d8e4ffb28a3c66
+validation:
+  catalog_generation_run: 31022791987
+  local_ci_run: 31024347215
+  remote_smoke_run: 31024349539
+  remote_smoke_pass_job: 92369694281
+render:
+  service_id: srv-d9pkpvu7bikc739i54u0
+  tracked_branch: fix/frontend-render-real-browser
+  candidate_deployed: false
+gates:
+  source: PASS
+  data: PASS
+  database: PASS
+  api: PASS
+  local_ci: PASS
+  remote_smoke: PASS
+  browser: PENDING
+  emily: PENDING_FINAL_EVIDENCE
+  vinicius: PENDING_PR
+  leo: PENDING_FINAL_GATE
+next_gate: RENDER_CANDIDATE_AND_BROWSER_SMOKE
