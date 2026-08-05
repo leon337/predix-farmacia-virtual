@@ -2,7 +2,7 @@ name: Remote Deploy Smoke
 
 on:
   push:
-    branches: [feat/deploy-publico-auditavel, main]
+    branches: [feat/deploy-publico-auditavel, feat/catalogo-real-anvisa, main]
   pull_request:
     branches: [main]
   workflow_dispatch:
@@ -16,7 +16,7 @@ jobs:
     timeout-minutes: 10
     env:
       API_BASE: https://qylqyhxpwffiripcpjej.supabase.co/functions/v1/predix-api
-      WEB_URL: https://qylqyhxpwffiripcpjej.supabase.co/functions/v1/predix-farmacia
+      WEB_URL: https://predix-farmacia-virtual.onrender.com
     steps:
       - name: Validate public frontend and API
         shell: bash
@@ -25,6 +25,7 @@ jobs:
           python - <<'PY'
           import json
           import os
+          import re
           import uuid
           from urllib.request import Request, urlopen
 
@@ -44,52 +45,80 @@ jobs:
               html = response.read().decode('utf-8')
               assert response.status == 200
               assert 'Predix Farmácia Virtual' in html
-              assert 'AMBIENTE FICTÍCIO' in html
 
           status, health = request('/api/health')
           assert status == 200
           assert health['status'] == 'ok'
           assert health['products'] == 500
+          assert health['realProducts'] == 500
+          assert health['productsWithoutPrice'] == 500
+          assert health['catalogIdentity'] == 'real'
+          assert health['operations'] == 'simulated'
+          assert health['prices'] == 'not-provided'
           assert health['database'] == 'supabase-postgres'
 
           status, company = request('/api/company')
           assert status == 200
-          assert company['isDemo'] is True
+          assert company['operationsSimulated'] is True
+          assert company['identityReal'] is False
 
-          status, products = request('/api/products?page=1&pageSize=2')
+          status, products = request('/api/products?page=1&pageSize=24')
           assert status == 200
           assert products['total'] == 500
-          assert len(products['items']) == 2
-          product = products['items'][0]
+          assert products['identityReal'] is True
+          assert products['operationsSimulated'] is True
+          assert products['pricesProvided'] is False
+          assert len(products['items']) == 24
+          assert not any(re.search(r'Demo\s+\d{3}', item['name'], re.I) for item in products['items'])
+          product = next(item for item in products['items'] if item['quantityAvailable'] > 0)
+          assert product['identityReal'] is True
+          assert product['operationsSimulated'] is True
+          assert product['anvisaRegistration']
+          assert product['riskClass'] in ('I', 'II', '1', '2')
+          assert product['priceCents'] is None
+          assert product['priceAvailable'] is False
+          assert product['price'] == 'Consulte o estabelecimento'
+          assert product['activeIngredient'] is None
 
           status, chat = request('/api/chat', method='POST', body={
-              'message': f"qual o preço do {product['name']}",
-              'sessionId': 'github-remote-smoke'
+              'message': f"qual o preço do registro {product['anvisaRegistration']}",
+              'sessionId': 'github-remote-catalog-real-smoke'
           })
           assert status == 200
           assert chat['tool'] == 'search_products'
-          assert chat['sources']
+          assert chat['identityReal'] is True
+          assert chat['operationsSimulated'] is True
+          assert 'preço comercial não está cadastrado' in chat['message']
+          assert any(str(product['anvisaRegistration']) in source for source in chat['sources'])
 
           status, reservation = request('/api/reservations', method='POST', body={
-              'customerName': 'Cliente Smoke Demo',
+              'customerName': 'Cliente Smoke Demonstração',
               'items': [{'productId': product['id'], 'quantity': 1}]
-          }, headers={'Idempotency-Key': 'smoke-' + str(uuid.uuid4())})
+          }, headers={'Idempotency-Key': 'catalog-real-smoke-' + str(uuid.uuid4())})
           assert status == 201
           assert reservation['status'] == 'ACTIVE'
-          assert reservation['isDemo'] is True
+          assert reservation['totalCents'] is None
+
+          status, cancelled = request(f"/api/reservations/{reservation['id']}/cancel", method='POST', body={})
+          assert status == 200
+          assert cancelled['status'] == 'CANCELLED'
 
           status, reports = request('/api/reports')
           assert status == 200
+          assert reports['realIdentityProducts'] == 500
+          assert reports['productsWithoutPrice'] == 500
           assert reports['totalAttendances'] >= 1
-          assert reports['reservations'] >= 1
+          assert reports['operationsSimulated'] is True
 
           print(json.dumps({
               'frontend': 'PASS',
               'health': health,
               'company': company['name'],
               'catalog_total': products['total'],
+              'sample_registration': product['anvisaRegistration'],
+              'price': product['price'],
               'chat': 'PASS',
-              'reservation': reservation['id'],
+              'reservation_created_and_cancelled': reservation['id'],
               'reports': 'PASS'
           }, ensure_ascii=False, indent=2))
           PY
