@@ -1,11 +1,11 @@
 mission_id: MCF-PFV-CATALOG-REAL-001
-status: CANDIDATE_AWAITING_BROWSER_DEPLOY
+status: CANDIDATE_DEPLOYED_BROWSER_RETRY_REQUIRED
 risk_class: B
 human_authority: Leandro
 operational_authority: Leo
 coordinator: Mestre
 branch: feat/catalogo-real-anvisa
-candidate_sha: 50448a15d13ec3580249c36a7447c69010191124
+candidate_code_sha: 31416bd75f8b98aefa731a6c30e706fe4e7893f2
 catalog:
   identities_real: 500
   products_without_price: 500
@@ -28,13 +28,20 @@ api:
   digest: 54801b70043a895976f7bce0ef1b6a446d8dc5635c23946995d8e4ffb28a3c66
 validation:
   catalog_generation_run: 31022791987
-  local_ci_run: 31024347215
-  remote_smoke_run: 31024349539
-  remote_smoke_pass_job: 92369694281
+  candidate_ci_run: 31024924108
+  candidate_remote_smoke_run: 31024924303
+  candidate_ci: success
+  candidate_remote_smoke: success
+  first_browser_run: 31024993042
+  first_browser_job: 92371024867
+  first_browser_result: failure_cached_previous_frontend
 render:
   service_id: srv-d9pkpvu7bikc739i54u0
   tracked_branch: fix/frontend-render-real-browser
-  candidate_deployed: false
+  candidate_deploy_id: dep-d9pm6mp5efls73a6l8sg
+  candidate_deployed_sha: 5132731789d9093cf41f0b1e4d6371eb349fab46
+  candidate_deployed: true
+  status: live
 gates:
   source: PASS
   data: PASS
@@ -42,8 +49,8 @@ gates:
   api: PASS
   local_ci: PASS
   remote_smoke: PASS
-  browser: PENDING
-  emily: PENDING_FINAL_EVIDENCE
+  browser: RETRY_REQUIRED_AFTER_CACHE_FIX
+  emily: PENDING_REPEATED_BROWSER_EVIDENCE
   vinicius: PENDING_PR
   leo: PENDING_FINAL_GATE
-next_gate: RENDER_CANDIDATE_AND_BROWSER_SMOKE
+next_gate: DEPLOY_CACHE_FIXED_WORKFLOW_AND_REPEAT_BROWSER
