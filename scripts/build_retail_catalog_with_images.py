@@ -8,13 +8,16 @@ import time
 import unicodedata
 import urllib.parse
 import urllib.request
+from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
 TARGET_COUNT = 500
 PAGE_SIZE = 100
-MAX_PAGES = 40
+MAX_PAGES = 20
+SEARCH_INTERVAL_SECONDS = 6.5
+IMAGE_WORKERS = 12
 ROOT = Path(__file__).resolve().parents[1]
 OUTPUT = ROOT / "data" / "retail_products_with_images.json"
 REPORT = ROOT / "audit" / "MCF-PFV-CATALOG-IMAGES-001" / "SOURCE-REPORT.md"
@@ -65,7 +68,7 @@ def image_is_reachable(url: str, timeout: int = 20) -> bool:
     try:
         request = urllib.request.Request(
             url,
-            headers={"User-Agent": USER_AGENT, "Range": "bytes=0-1023", "Accept": "image/*"},
+            headers={"User-Agent": USER_AGENT, "Range": "bytes=0-2047", "Accept": "image/*"},
         )
         with urllib.request.urlopen(request, timeout=timeout) as response:
             content_type = response.headers.get("content-type", "").lower()
@@ -97,7 +100,6 @@ def fetch_candidates(base: str, country_filter: bool) -> tuple[list[dict[str, An
         "missing_brand": 0,
         "missing_image": 0,
         "duplicates": 0,
-        "invalid_image": 0,
     }
 
     for page in range(1, MAX_PAGES + 1):
@@ -158,7 +160,8 @@ def fetch_candidates(base: str, country_filter: bool) -> tuple[list[dict[str, An
                 break
         if len(accepted) >= TARGET_COUNT * 2:
             break
-        time.sleep(1.1)
+        if page < MAX_PAGES:
+            time.sleep(SEARCH_INTERVAL_SECONDS)
     return accepted, stats
 
 
@@ -188,13 +191,9 @@ def build_catalog() -> tuple[list[dict[str, Any]], dict[str, Any]]:
 
     all_candidates.sort(key=lambda item: (normalized(item["name"]), normalized(item["brand"]), item["barcode"]))
 
-    verified: list[dict[str, Any]] = []
-    for candidate in all_candidates:
-        if not image_is_reachable(candidate["imageUrl"]):
-            continue
-        verified.append(candidate)
-        if len(verified) == TARGET_COUNT:
-            break
+    with ThreadPoolExecutor(max_workers=IMAGE_WORKERS) as executor:
+        reachable = executor.map(image_is_reachable, [item["imageUrl"] for item in all_candidates])
+        verified = [item for item, ok in zip(all_candidates, reachable) if ok][:TARGET_COUNT]
 
     if len(verified) != TARGET_COUNT:
         raise RuntimeError(
@@ -202,6 +201,7 @@ def build_catalog() -> tuple[list[dict[str, Any]], dict[str, Any]]:
             f"candidatos={len(all_candidates)}; estatísticas={combined_stats}"
         )
 
+    verified_at = datetime.now(timezone.utc).isoformat()
     products: list[dict[str, Any]] = []
     for index, item in enumerate(verified, start=1):
         products.append(
@@ -219,7 +219,7 @@ def build_catalog() -> tuple[list[dict[str, Any]], dict[str, Any]]:
                 "operationsSimulated": True,
                 "imageUrl": item["imageUrl"],
                 "imageSource": item["imageSource"],
-                "imageVerifiedAt": datetime.now(timezone.utc).isoformat(),
+                "imageVerifiedAt": verified_at,
                 "sourceUrl": item["sourceUrl"],
                 "sourceDataset": item["imageSource"],
             }
