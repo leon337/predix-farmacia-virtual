@@ -1,12 +1,17 @@
 mission_id: MCF-PFV-CATALOG-REAL-001
-status: CANDIDATE_BROWSER_VALIDATED_AWAITING_PR
+status: DELIVERED_REAL_CATALOG_BROWSER_VALIDATED
 risk_class: B
 human_authority: Leandro
 operational_authority: Leo
 coordinator: Mestre
-branch: feat/catalogo-real-anvisa
-candidate_sha: 88f7cae97a41f492cf03aa3e626ef8ef32429f5e
+public_url: https://predix-farmacia-virtual.onrender.com
+repository:
+  functional_pr: 5
+  candidate_sha: 49400af0ca1064dc7d15b8cd7cd7fef695f97c01
+  merge_sha: f7578b0c13799c8ab7a6a873cae2ba8194e42821
+  merge_method: squash
 catalog:
+  products: 500
   identities_real: 500
   products_without_price: 500
   medications_included: false
@@ -26,28 +31,25 @@ api:
   version: 3
   semantic_version: 1.1.1
   digest: 54801b70043a895976f7bce0ef1b6a446d8dc5635c23946995d8e4ffb28a3c66
-validation:
-  catalog_generation_run: 31022791987
-  candidate_ci_run: 31025325789
-  candidate_remote_smoke_run: 31025325176
-  candidate_browser_run: 31025386429
-  candidate_browser_job: 92372367944
-  candidate_ci: success
-  candidate_remote_smoke: success
-  candidate_browser: success
-browser_evidence:
-  artifact_id: 8938372627
-  artifact_digest: sha256:4d8400aa262f7a2e0a9e0346dd30398fef0948d0b85f512983455cd75318f355
-  mobile_screenshot_sha256: 7faa0c5ead35c423598bcc302e478ec83222b46242d69caf5755bfc32700cd4e
-  rendered_dom_sha256: b4e7d84df6f7cb8e835bf6bc7f29dd588029e2bedc3045459e9a2abe57bb10dc
-  raw_html_visible: false
-  synthetic_markers_visible: false
+main_validation:
+  ci:
+    run_id: 31025924616
+    conclusion: success
+  remote_deploy_smoke:
+    run_id: 31025924878
+    conclusion: success
+  browser_render_smoke:
+    run_id: 31025926247
+    conclusion: success
+    artifact_id: 8938590089
+    artifact_digest: sha256:68dfc877f35c96f8d96b5c43d8b69e22f085a6a1472fcdfdc867fdc0ccce8e15
 render:
   service_id: srv-d9pkpvu7bikc739i54u0
-  tracked_branch: fix/frontend-render-real-browser
-  candidate_deploy_id: dep-d9pm91egekts73dq8dqg
-  candidate_deployed_sha: 88f7cae97a41f492cf03aa3e626ef8ef32429f5e
+  deploy_id: dep-d9pmcarbc2fs73dfd5ig
+  deployed_sha: f7578b0c13799c8ab7a6a873cae2ba8194e42821
   status: live
+  tracked_branch: fix/frontend-render-real-browser
+  forced_sync_after_squash: true
 gates:
   source: PASS
   data: PASS
@@ -57,6 +59,6 @@ gates:
   remote_smoke: PASS
   browser: PASS
   emily: PASS_WITH_RECORDED_DEVIATIONS
-  vinicius: PENDING_PR
-  leo: PENDING_FINAL_GATE
-next_gate: OPEN_PR_AND_REVIEW
+  vinicius: PASS_WITH_RECORDED_HISTORY
+  leo: APPROVED
+next_gate: NONE
