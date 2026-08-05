@@ -1,0 +1,38 @@
+mission_id: MCF-PFV-DEPLOY-001
+state: READY_FOR_PR
+human_authority: Leandro
+operational_authority: Leo
+coordinator: Mestre
+risk_class: B
+public_frontend: https://qylqyhxpwffiripcpjej.supabase.co/functions/v1/predix-farmacia
+public_api: https://qylqyhxpwffiripcpjej.supabase.co/functions/v1/predix-api
+database:
+  provider: Supabase PostgreSQL
+  project_id: qylqyhxpwffiripcpjej
+  products: 500
+  inventory_rows: 500
+  rls_enabled: true
+  public_table_access: denied
+runtime:
+  api_function_id: e79d8e88-9b38-4ce2-92c0-50ca4395ab84
+  api_version: 1
+  frontend_function_id: 32592948-ed44-4faa-b853-524647f6f617
+  frontend_version: 1
+validation:
+  workflow_run: 31013163332
+  job_id: 92330304228
+  result: SUCCESS
+security:
+  public_rpc_execute: revoked
+  service_role_only: true
+  advisor_scope_result: PASS
+recorded_deviations:
+  - render_free_database_limit
+  - supabase_active_project_limit
+  - temporary_main_write_removed
+  - audit_directory_initialized_directly_on_main
+  - rpc_public_inheritance_corrected
+remaining_gate:
+  - pull_request_review
+  - merge_to_main
+  - main_ci_success
