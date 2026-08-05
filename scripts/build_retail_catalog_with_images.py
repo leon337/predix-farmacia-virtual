@@ -16,6 +16,7 @@ from typing import Any
 TARGET_COUNT = 500
 CANDIDATE_LIMIT = 16000
 IMAGE_WORKERS = 12
+IMAGE_BATCH_SIZE = 240
 ROOT = Path(__file__).resolve().parents[1]
 OUTPUT = ROOT / "data" / "retail_products_with_images.json"
 REPORT = ROOT / "audit" / "MCF-PFV-CATALOG-IMAGES-001" / "SOURCE-REPORT.md"
@@ -29,7 +30,7 @@ FOOD_TERMS = re.compile(
     re.IGNORECASE,
 )
 MEDICINE_TERMS = re.compile(
-    r"\b(advil|antacid|antiacid|tablet|tablets|comprimido|comprimidos|capsule|capsules|c[aá]psula|c[aá]psulas|syrup|xarope|medicine|medication|medicament|m[eé]dicament|ibuprofen|ibuprofeno|aspirin|aspirina|acetaminophen|paracetamol|analgesic|analg[eé]sico|pain relief|allergy relief|antifungal|anti fungal|antif[uú]ngico|laxative|laxante|suppository|suposit[oó]rio|nicotine|nicotina|cbd|thc|sleep aid|sleeping pills|cough syrup|cold and flu)\b",
+    r"\b(advil|antacids?|antiacids?|tablets?|comprimidos?|capsules?|c[aá]psulas?|syrup|xarope|medicine|medication|medicament|m[eé]dicament|ibuprofen|ibuprofeno|aspirin|aspirina|acetaminophen|paracetamol|analgesic|analg[eé]sico|pain relief|allergy relief|antifungal|anti fungal|antif[uú]ngico|laxative|laxante|suppository|suposit[oó]rio|nicotine|nicotina|cbd|thc|sleep aid|sleeping pills|cough syrup|cold and flu)\b",
     re.IGNORECASE,
 )
 HOUSEHOLD_TERMS = re.compile(
@@ -37,14 +38,17 @@ HOUSEHOLD_TERMS = re.compile(
     re.IGNORECASE,
 )
 CARE_TERMS = re.compile(
-    r"\b(shampoo|conditioner|acondicionador|condicionador|hair mask|hair cream|hair oil|hair gel|hair spray|hair serum|cabelo|capilar|cheveux|capillaire|scalp|soap|sabonete|savon|shower gel|gel douche|body wash|deodorant|d[eé]odorant|antiperspirant|anti transpirant|toothpaste|dentifrice|mouthwash|bain de bouche|oral rinse|cream|cr[eè]me|creme|hidratante|moisturizer|moisturiser|moisturizing|lotion|lo[cç][aã]o|serum|s[eé]rum|cleanser|cleansing|nettoyant|face wash|facial|visage|face cream|body cream|body lotion|corps|body care|skin care|skincare|skin|peau|derm|sunscreen|sun cream|solar|solaire|spf|fps|after sun|mask|masque|m[aá]scara facial|makeup|maquillage|lipstick|batom|foundation|concealer|blush|mascara|nail polish|nail care|esmalte|removedor|ongle|perfume|parfum|eau de toilette|eau de parfum|cologne|col[oô]nia|shaving|aftershave|rasage|barba|beard|balm|baume|lip balm|l[eè]vres|acne|exfoliant|scrub|esfoliante|hand cream|hand soap|mains|m[aã]os|dental floss|fio dental|toothbrush|escova dental|oral care|dental care|hygiene|hygi[eè]ne|cosmetic|cosm[eé]tique|baby shampoo|baby lotion|baby wash|bebe|beb[eê]|diaper cream|assadura)\b",
+    r"\b(shampoos?|conditioners?|acondicionadores?|condicionadores?|hair masks?|hair creams?|hair oils?|hair gels?|hair sprays?|hair serums?|cabelo|capilar|cheveux|capillaire|scalp|soaps?|sabonetes?|savon|shower gels?|gel douche|body wash|deodorants?|d[eé]odorants?|antiperspirants?|anti transpirant|toothpastes?|dentifrice|mouthwashes?|bain de bouche|oral rinse|creams?|cr[eè]mes?|cremes?|hidratantes?|moisturizers?|moisturisers?|moisturizing|lotions?|lo[cç][aã]o|serums?|s[eé]rums?|cleansers?|cleansing|nettoyant|face wash|facial|visage|face creams?|body creams?|body lotions?|corps|body care|skin care|skincare|skin|peau|derm|sunscreens?|sun creams?|solar|solaire|spf|fps|after sun|masks?|masque|m[aá]scara facial|makeup|maquillage|lipsticks?|batom|foundations?|concealers?|blush|mascara|nail polish|nail care|esmalte|removedor|ongle|perfumes?|parfum|eau de toilette|eau de parfum|colognes?|col[oô]nia|shaving|aftershave|rasage|barba|beard|balms?|baume|lip balms?|l[eè]vres|acne|exfoliant|scrub|esfoliante|hand creams?|hand soaps?|mains|m[aã]os|dental floss|fio dental|toothbrushes?|escova dental|oral care|dental care|hygiene|hygi[eè]ne|cosmetics?|cosmetic products?|cosm[eé]tique|baby shampoo|baby lotion|baby wash|bebe|beb[eê]|diaper cream|assadura)\b",
     re.IGNORECASE,
 )
 GENERIC_CATEGORIES = re.compile(
     r"^(open beauty facts|non food products|non alimentaire|productos no alimenticios|incorrect product type|higiene e cuidados pessoais|hygiene|hygi[eè]ne)$",
     re.IGNORECASE,
 )
-QUANTITY_ONLY = re.compile(r"^\s*\d+(?:[.,]\d+)?\s*(?:mg|g|kg|ml|cl|dl|l|un|unid|unidade|unidades)?\s*$", re.IGNORECASE)
+QUANTITY_ONLY = re.compile(
+    r"^\s*\d+(?:[.,]\d+)?\s*(?:mg|g|kg|ml|cl|dl|l|un|unid|unidade|unidades)?\s*$",
+    re.IGNORECASE,
+)
 DIGITS_ONLY = re.compile(r"^\d{8,14}$")
 
 
@@ -75,21 +79,36 @@ def first_value(row: dict[str, str], *keys: str) -> str:
 
 
 def raw_categories(row: dict[str, str]) -> str:
-    return first_value(row, "categories", "categories_en", "categories_tags", "main_category", "main_category_en")
+    return first_value(
+        row,
+        "categories",
+        "categories_en",
+        "categories_tags",
+        "main_category",
+        "main_category_en",
+    )
 
 
 def scope_text(name: str, row: dict[str, str]) -> str:
     categories = raw_categories(row)
-    category_parts = [clean(part.split(":")[-1].replace("-", " ")) for part in categories.split(",") if clean(part)]
+    category_parts = [
+        clean(part.split(":")[-1].replace("-", " "))
+        for part in categories.split(",")
+        if clean(part)
+    ]
     specific = [part for part in category_parts if not GENERIC_CATEGORIES.fullmatch(part)]
-    return " ".join([name, *specific])
+    return clean(" ".join([name, *specific]))[:1000]
 
 
-def valid_scope(name: str, row: dict[str, str]) -> bool:
-    candidate = normalized(scope_text(name, row))
+def valid_scope(evidence: str, name: str) -> bool:
+    candidate = normalized(evidence)
     if DIGITS_ONLY.fullmatch(clean(name)):
         return False
-    if FOOD_TERMS.search(candidate) or MEDICINE_TERMS.search(candidate) or HOUSEHOLD_TERMS.search(candidate):
+    if (
+        FOOD_TERMS.search(candidate)
+        or MEDICINE_TERMS.search(candidate)
+        or HOUSEHOLD_TERMS.search(candidate)
+    ):
         return False
     return bool(CARE_TERMS.search(candidate))
 
@@ -106,7 +125,11 @@ def image_is_reachable(url: str, timeout: int = 20) -> bool:
     try:
         request = urllib.request.Request(
             url,
-            headers={"User-Agent": USER_AGENT, "Range": "bytes=0-2047", "Accept": "image/*"},
+            headers={
+                "User-Agent": USER_AGENT,
+                "Range": "bytes=0-2047",
+                "Accept": "image/*",
+            },
         )
         with urllib.request.urlopen(request, timeout=timeout) as response:
             content_type = response.headers.get("content-type", "").lower()
@@ -161,7 +184,9 @@ def parse_dump(path: Path) -> tuple[list[dict[str, Any]], dict[str, int], list[s
         ]
         for group in required_groups:
             if not any(key in headers for key in group):
-                raise RuntimeError(f"Dump incompatível: nenhuma coluna de {group}; cabeçalhos={headers[:40]}")
+                raise RuntimeError(
+                    f"Dump incompatível: nenhuma coluna de {group}; cabeçalhos={headers[:40]}"
+                )
 
         for row in reader:
             stats["scanned"] += 1
@@ -170,6 +195,7 @@ def parse_dump(path: Path) -> tuple[list[dict[str, Any]], dict[str, int], list[s
             name = name_pt or first_value(row, "product_name")
             brand = first_value(row, "brands")
             image_url = first_value(row, "image_front_url", "image_url")
+            evidence = scope_text(name, row)
 
             if not valid_barcode(code):
                 stats["missingCode"] += 1
@@ -177,7 +203,7 @@ def parse_dump(path: Path) -> tuple[list[dict[str, Any]], dict[str, int], list[s
             if not name:
                 stats["missingName"] += 1
                 continue
-            if not valid_scope(name, row):
+            if not valid_scope(evidence, name):
                 stats["outsideCareScope"] += 1
                 continue
             if not brand:
@@ -207,6 +233,7 @@ def parse_dump(path: Path) -> tuple[list[dict[str, Any]], dict[str, int], list[s
                     "name": name[:220],
                     "brand": brand[:220],
                     "category": category_from(row),
+                    "scopeEvidence": evidence,
                     "presentation": first_value(row, "quantity", "product_quantity")[:120]
                     or "Apresentação informada na embalagem",
                     "imageUrl": image_url,
@@ -227,15 +254,24 @@ def parse_dump(path: Path) -> tuple[list[dict[str, Any]], dict[str, int], list[s
     return candidates, stats, headers
 
 
+def verified_candidates(candidates: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    verified: list[dict[str, Any]] = []
+    for start in range(0, len(candidates), IMAGE_BATCH_SIZE):
+        batch = candidates[start : start + IMAGE_BATCH_SIZE]
+        with ThreadPoolExecutor(max_workers=IMAGE_WORKERS) as executor:
+            reachable = executor.map(image_is_reachable, [item["imageUrl"] for item in batch])
+            verified.extend(item for item, ok in zip(batch, reachable) if ok)
+        if len(verified) >= TARGET_COUNT:
+            return verified[:TARGET_COUNT]
+    return verified
+
+
 def build_catalog(path: Path) -> tuple[list[dict[str, Any]], dict[str, Any]]:
     candidates, stats, headers = parse_dump(path)
     if len(candidates) < TARGET_COUNT:
         raise RuntimeError(f"Candidatos insuficientes: {len(candidates)}; estatísticas={stats}")
 
-    with ThreadPoolExecutor(max_workers=IMAGE_WORKERS) as executor:
-        reachable = executor.map(image_is_reachable, [item["imageUrl"] for item in candidates])
-        verified = [item for item, ok in zip(candidates, reachable) if ok][:TARGET_COUNT]
-
+    verified = verified_candidates(candidates)
     if len(verified) != TARGET_COUNT:
         raise RuntimeError(
             f"Catálogo incompleto: imagens verificadas={len(verified)} esperado={TARGET_COUNT}; "
@@ -252,6 +288,7 @@ def build_catalog(path: Path) -> tuple[list[dict[str, Any]], dict[str, Any]]:
                 "barcode": item["barcode"],
                 "name": item["name"],
                 "category": item["category"],
+                "scopeEvidence": item["scopeEvidence"],
                 "manufacturer": item["brand"],
                 "presentation": item["presentation"],
                 "priceCents": None,
@@ -274,6 +311,7 @@ def build_catalog(path: Path) -> tuple[list[dict[str, Any]], dict[str, Any]]:
         "statistics": stats,
         "candidates": len(candidates),
         "scopePolicy": "personal-care-positive-signal; food-medicine-household-denylist",
+        "scopeEvidencePersisted": True,
     }
     return products, metadata
 
@@ -302,7 +340,10 @@ def main() -> int:
     }
 
     args.output.parent.mkdir(parents=True, exist_ok=True)
-    args.output.write_text(json.dumps(payload, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+    args.output.write_text(
+        json.dumps(payload, ensure_ascii=False, indent=2) + "\n",
+        encoding="utf-8",
+    )
     catalog_sha = hashlib.sha256(args.output.read_bytes()).hexdigest()
 
     REPORT.parent.mkdir(parents=True, exist_ok=True)
@@ -313,6 +354,7 @@ def main() -> int:
         f"- Tamanho do dump: `{source_meta['dumpBytes']}` bytes\n"
         f"- Produtos distintos: `{len(products)}`\n"
         f"- Produtos com imagem verificada: `{len(products)}`\n"
+        f"- Produtos com evidência de escopo persistida: `{len(products)}`\n"
         f"- SHA-256 do catálogo: `{catalog_sha}`\n"
         f"- Gerado em: `{generated_at}`\n"
         f"- Registros examinados: `{source_meta['statistics']['scanned']}`\n"
@@ -321,6 +363,7 @@ def main() -> int:
         "- Fonte: `Open Beauty Facts`\n"
         "- Identidade: código de barras + nome + marca\n"
         "- Escopo exigido: higiene, beleza e cuidados pessoais\n"
+        "- Evidência de escopo: preservada em cada ficha no campo `scopeEvidence`\n"
         "- Medicamentos, alimentos, bebidas e itens domésticos incompatíveis: excluídos\n"
         "- Estoque: separado do cadastro e inteiramente simulado\n"
         "- Preços: ausentes; nenhum valor inventado\n\n"
@@ -335,6 +378,7 @@ def main() -> int:
                 "products": len(products),
                 "distinct": len({product["barcode"] for product in products}),
                 "images": len([product for product in products if product["imageUrl"]]),
+                "scopeEvidence": len([product for product in products if product["scopeEvidence"]]),
                 "dump_sha256": source_meta["dumpSha256"],
                 "catalog_sha256": catalog_sha,
             },
