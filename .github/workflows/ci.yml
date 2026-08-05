@@ -1,0 +1,38 @@
+name: CI
+
+on:
+  push:
+    branches: [main, feat/mvp-funcionario-virtual]
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Compile
+        run: python -m compileall -q app.py tests
+      - name: Test MVP
+        run: python -m unittest discover -s tests -v
+      - name: Smoke HTTP
+        run: |
+          rm -f /tmp/predix-ci.db
+          PREDIX_DATABASE_PATH=/tmp/predix-ci.db python app.py >/tmp/predix.log 2>&1 &
+          server_pid=$!
+          trap 'kill $server_pid 2>/dev/null || true' EXIT
+          for attempt in $(seq 1 20); do
+            if curl --fail --silent --show-error http://127.0.0.1:8000/api/health > /tmp/predix-health.json; then
+              break
+            fi
+            sleep 1
+          done
+          python -c "import json; value=json.load(open('/tmp/predix-health.json')); assert value == {'status':'ok','products':500,'isDemo':True}; print('SMOKE_PASS products=500')"
+          curl --fail --silent http://127.0.0.1:8000/ | grep --quiet 'FUNCIONÁRIO VIRTUAL'
