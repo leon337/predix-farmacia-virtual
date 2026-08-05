@@ -35,6 +35,7 @@ def main() -> int:
     assert meta["operationsAreSimulated"] is True
     assert meta["pricesAreUnavailable"] is True
     assert meta["scopePolicy"] == "personal-care-positive-signal; food-medicine-household-denylist"
+    assert meta["scopeEvidencePersisted"] is True
     assert digest in report
 
     assert len({p["id"] for p in products}) == 500
@@ -43,13 +44,15 @@ def main() -> int:
     assert len({(p["name"].casefold(), p["manufacturer"].casefold()) for p in products}) == 500
 
     for product in products:
-        searchable = " ".join((product["name"], product["category"]))
+        evidence = str(product.get("scopeEvidence") or "").strip()
+        searchable = " ".join((product["name"], product["category"], evidence))
         assert re.fullmatch(r"\d{8,14}", product["barcode"]), product
         assert product["name"] and product["manufacturer"] and product["category"], product
+        assert evidence, product
         assert not FOOD_TERMS.search(searchable), product
         assert not MEDICINE_TERMS.search(searchable), product
         assert not HOUSEHOLD_TERMS.search(searchable), product
-        assert CARE_TERMS.search(searchable), product
+        assert CARE_TERMS.search(evidence), product
         assert not QUANTITY_ONLY.fullmatch(product["manufacturer"]), product
         assert urlparse(product["imageUrl"]).hostname == "images.openbeautyfacts.org", product
         assert product["imageSource"] == "Open Beauty Facts", product
@@ -66,6 +69,7 @@ def main() -> int:
                 "productRecords": 500,
                 "distinctProducts": 500,
                 "productsWithImages": 500,
+                "productsWithScopeEvidence": 500,
                 "blockedProducts": 0,
                 "catalogSha256": digest,
             },
