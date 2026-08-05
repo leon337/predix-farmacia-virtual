@@ -14,7 +14,7 @@ from pathlib import Path
 from typing import Any
 
 TARGET_COUNT = 500
-CANDIDATE_LIMIT = 8000
+CANDIDATE_LIMIT = 16000
 IMAGE_WORKERS = 12
 ROOT = Path(__file__).resolve().parents[1]
 OUTPUT = ROOT / "data" / "retail_products_with_images.json"
@@ -25,10 +25,27 @@ IMAGE_HOST = "images.openbeautyfacts.org"
 USER_AGENT = "PredixFarmaciaVirtual/1.0 (https://github.com/leon337/predix-farmacia-virtual)"
 
 FOOD_TERMS = re.compile(
-    r"\b(p[aã]o|arroz|feij[aã]o|milho|farinha|biscoit|bolach|chocolate|caf[eé]|leite|queijo|iogurte|manteiga|margarina|macarr[aã]o|massa|bolo|sorvete|pizza|hamb[uú]rguer|sandu[ií]che|carne|frango|peixe|lingui[cç]a|cerveja|vinho|refrigerante|suco|bebida|snack|cereal|granola|a[cç][uú]car|sal|tempero|molho|doce|bombom|geleia|mel\b)\b",
+    r"\b(p[aã]o|arroz|feij[aã]o|milho|farinha|biscoit|bolach|chocolate|caf[eé]|coffee|tea|rooibos|leite|milk|queijo|iogurte|manteiga|margarina|macarr[aã]o|massa|bolo|sorvete|pizza|hamb[uú]rguer|sandu[ií]che|carne|frango|peixe|lingui[cç]a|cerveja|vinho|refrigerante|suco|juice|bebida|drink|snack|cereal|granola|a[cç][uú]car|sugar|tempero|molho|doce|bombom|geleia)\b",
+    re.IGNORECASE,
+)
+MEDICINE_TERMS = re.compile(
+    r"\b(advil|antacid|antiacid|tablet|tablets|comprimido|comprimidos|capsule|capsules|c[aá]psula|c[aá]psulas|syrup|xarope|medicine|medication|medicament|m[eé]dicament|ibuprofen|ibuprofeno|aspirin|aspirina|acetaminophen|paracetamol|analgesic|analg[eé]sico|pain relief|allergy relief|antifungal|anti fungal|antif[uú]ngico|laxative|laxante|suppository|suposit[oó]rio|nicotine|nicotina|cbd|thc|sleep aid|sleeping pills|cough syrup|cold and flu)\b",
+    re.IGNORECASE,
+)
+HOUSEHOLD_TERMS = re.compile(
+    r"\b(bathroom tissue|toilet paper|paper towel|papel higi[eê]nico|papel toalha|laundry|detergent|dish soap|dishwashing|bleach|floor cleaner|surface cleaner|trash bag|garbage bag)\b",
+    re.IGNORECASE,
+)
+CARE_TERMS = re.compile(
+    r"\b(shampoo|conditioner|acondicionador|condicionador|hair mask|hair cream|hair oil|hair gel|hair spray|hair serum|cabelo|capilar|cheveux|capillaire|scalp|soap|sabonete|savon|shower gel|gel douche|body wash|deodorant|d[eé]odorant|antiperspirant|anti transpirant|toothpaste|dentifrice|mouthwash|bain de bouche|oral rinse|cream|cr[eè]me|creme|hidratante|moisturizer|moisturiser|moisturizing|lotion|lo[cç][aã]o|serum|s[eé]rum|cleanser|cleansing|nettoyant|face wash|facial|visage|face cream|body cream|body lotion|corps|body care|skin care|skincare|skin|peau|derm|sunscreen|sun cream|solar|solaire|spf|fps|after sun|mask|masque|m[aá]scara facial|makeup|maquillage|lipstick|batom|foundation|concealer|blush|mascara|nail polish|nail care|esmalte|removedor|ongle|perfume|parfum|eau de toilette|eau de parfum|cologne|col[oô]nia|shaving|aftershave|rasage|barba|beard|balm|baume|lip balm|l[eè]vres|acne|exfoliant|scrub|esfoliante|hand cream|hand soap|mains|m[aã]os|dental floss|fio dental|toothbrush|escova dental|oral care|dental care|hygiene|hygi[eè]ne|cosmetic|cosm[eé]tique|baby shampoo|baby lotion|baby wash|bebe|beb[eê]|diaper cream|assadura)\b",
+    re.IGNORECASE,
+)
+GENERIC_CATEGORIES = re.compile(
+    r"^(open beauty facts|non food products|non alimentaire|productos no alimenticios|incorrect product type|higiene e cuidados pessoais|hygiene|hygi[eè]ne)$",
     re.IGNORECASE,
 )
 QUANTITY_ONLY = re.compile(r"^\s*\d+(?:[.,]\d+)?\s*(?:mg|g|kg|ml|cl|dl|l|un|unid|unidade|unidades)?\s*$", re.IGNORECASE)
+DIGITS_ONLY = re.compile(r"^\d{8,14}$")
 
 
 def clean(value: Any) -> str:
@@ -49,8 +66,32 @@ def valid_brand(value: str) -> bool:
     return bool(re.search(r"[A-Za-zÀ-ÿ]", value)) and not QUANTITY_ONLY.fullmatch(value)
 
 
-def valid_product_name(value: str) -> bool:
-    return len(value) >= 3 and not FOOD_TERMS.search(normalized(value))
+def first_value(row: dict[str, str], *keys: str) -> str:
+    for key in keys:
+        value = clean(row.get(key))
+        if value:
+            return value
+    return ""
+
+
+def raw_categories(row: dict[str, str]) -> str:
+    return first_value(row, "categories", "categories_en", "categories_tags", "main_category", "main_category_en")
+
+
+def scope_text(name: str, row: dict[str, str]) -> str:
+    categories = raw_categories(row)
+    category_parts = [clean(part.split(":")[-1].replace("-", " ")) for part in categories.split(",") if clean(part)]
+    specific = [part for part in category_parts if not GENERIC_CATEGORIES.fullmatch(part)]
+    return " ".join([name, *specific])
+
+
+def valid_scope(name: str, row: dict[str, str]) -> bool:
+    candidate = normalized(scope_text(name, row))
+    if DIGITS_ONLY.fullmatch(clean(name)):
+        return False
+    if FOOD_TERMS.search(candidate) or MEDICINE_TERMS.search(candidate) or HOUSEHOLD_TERMS.search(candidate):
+        return False
+    return bool(CARE_TERMS.search(candidate))
 
 
 def valid_image_url(value: str) -> bool:
@@ -59,14 +100,6 @@ def valid_image_url(value: str) -> bool:
         return parsed.scheme == "https" and parsed.hostname == IMAGE_HOST and bool(parsed.path)
     except ValueError:
         return False
-
-
-def first_value(row: dict[str, str], *keys: str) -> str:
-    for key in keys:
-        value = clean(row.get(key))
-        if value:
-            return value
-    return ""
 
 
 def image_is_reachable(url: str, timeout: int = 20) -> bool:
@@ -83,12 +116,12 @@ def image_is_reachable(url: str, timeout: int = 20) -> bool:
 
 
 def category_from(row: dict[str, str]) -> str:
-    categories = first_value(row, "categories", "categories_en", "categories_tags", "main_category", "main_category_en")
+    categories = raw_categories(row)
     if categories:
-        raw = categories.split(",")[0].split(":")[-1].replace("-", " ")
-        value = clean(raw).title()[:120]
-        if value and not FOOD_TERMS.search(normalized(value)):
-            return value
+        for part in categories.split(","):
+            raw = clean(part.split(":")[-1].replace("-", " "))
+            if raw and not GENERIC_CATEGORIES.fullmatch(raw):
+                return raw.title()[:120]
     return "Higiene e cuidados pessoais"
 
 
@@ -111,7 +144,7 @@ def parse_dump(path: Path) -> tuple[list[dict[str, Any]], dict[str, int], list[s
         "missingName": 0,
         "missingBrand": 0,
         "missingImage": 0,
-        "foodOrNonBeauty": 0,
+        "outsideCareScope": 0,
         "invalidBrand": 0,
         "invalidImageHost": 0,
         "duplicates": 0,
@@ -144,8 +177,8 @@ def parse_dump(path: Path) -> tuple[list[dict[str, Any]], dict[str, int], list[s
             if not name:
                 stats["missingName"] += 1
                 continue
-            if not valid_product_name(name):
-                stats["foodOrNonBeauty"] += 1
+            if not valid_scope(name, row):
+                stats["outsideCareScope"] += 1
                 continue
             if not brand:
                 stats["missingBrand"] += 1
@@ -240,7 +273,7 @@ def build_catalog(path: Path) -> tuple[list[dict[str, Any]], dict[str, Any]]:
         "headersDetected": headers,
         "statistics": stats,
         "candidates": len(candidates),
-        "excludedFoodTerms": FOOD_TERMS.pattern,
+        "scopePolicy": "personal-care-positive-signal; food-medicine-household-denylist",
     }
     return products, metadata
 
@@ -283,14 +316,16 @@ def main() -> int:
         f"- SHA-256 do catálogo: `{catalog_sha}`\n"
         f"- Gerado em: `{generated_at}`\n"
         f"- Registros examinados: `{source_meta['statistics']['scanned']}`\n"
-        f"- Registros excluídos como alimento/não beleza: `{source_meta['statistics']['foodOrNonBeauty']}`\n"
+        f"- Registros fora do escopo de cuidados pessoais: `{source_meta['statistics']['outsideCareScope']}`\n"
         f"- Fabricantes inválidos excluídos: `{source_meta['statistics']['invalidBrand']}`\n"
         "- Fonte: `Open Beauty Facts`\n"
         "- Identidade: código de barras + nome + marca\n"
+        "- Escopo exigido: higiene, beleza e cuidados pessoais\n"
+        "- Medicamentos, alimentos, bebidas e itens domésticos incompatíveis: excluídos\n"
         "- Estoque: separado do cadastro e inteiramente simulado\n"
         "- Preços: ausentes; nenhum valor inventado\n\n"
         "As imagens são URLs frontais de embalagem publicadas pela base aberta. "
-        "Cada uma respondeu como conteúdo de imagem durante a geração. Alimentos e registros com marca inválida foram rejeitados.\n",
+        "Cada uma respondeu como conteúdo de imagem durante a geração.\n",
         encoding="utf-8",
     )
 
