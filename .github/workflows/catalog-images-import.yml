@@ -1,0 +1,80 @@
+name: Catalogo 500 Produtos com Imagens
+
+on:
+  push:
+    branches:
+      - feat/catalogo-500-produtos-com-imagens
+    paths:
+      - scripts/build_retail_catalog_with_images.py
+      - .github/workflows/catalog-images-import.yml
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build-catalog-with-images:
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    steps:
+      - name: Checkout branch
+        uses: actions/checkout@v4
+        with:
+          ref: feat/catalogo-500-produtos-com-imagens
+          fetch-depth: 0
+
+      - name: Generate 500 distinct products with images
+        run: python3 scripts/build_retail_catalog_with_images.py
+
+      - name: Validate product and image counts
+        run: |
+          python3 - <<'PY'
+          import json
+          import re
+          from pathlib import Path
+
+          payload = json.loads(Path('data/retail_products_with_images.json').read_text(encoding='utf-8'))
+          products = payload['products']
+          meta = payload['meta']
+
+          assert len(products) == 500, len(products)
+          assert meta['acceptedProducts'] == 500, meta
+          assert meta['distinctProducts'] == 500, meta
+          assert meta['productsWithImages'] == 500, meta
+          assert meta['stockUnitsAreSeparate'] is True, meta
+          assert meta['operationsAreSimulated'] is True, meta
+          assert len({p['id'] for p in products}) == 500
+          assert len({p['sku'] for p in products}) == 500
+          assert len({p['barcode'] for p in products}) == 500
+          assert len({(p['name'].casefold(), p['manufacturer'].casefold()) for p in products}) == 500
+          assert all(re.fullmatch(r'\d{8,14}', p['barcode']) for p in products)
+          assert all(p['name'] and p['manufacturer'] and p['category'] for p in products)
+          assert all(p['imageUrl'].startswith('https://') for p in products)
+          assert all(p['imageSource'] in ('Open Beauty Facts', 'Open Products Facts') for p in products)
+          assert all(p['priceCents'] is None for p in products)
+          assert all(p['identityReal'] is True for p in products)
+          assert all(p['operationsSimulated'] is True for p in products)
+          print({
+              'product_records': len(products),
+              'distinct_barcodes': len({p['barcode'] for p in products}),
+              'products_with_images': len([p for p in products if p['imageUrl']]),
+          })
+          PY
+
+      - name: Reject synthetic catalog markers
+        run: |
+          ! grep -Eqi 'Demo [0-9]{3}|Composto demonstrativo|Predix Labs Simulação|Farma Exemplo Fictícia' data/retail_products_with_images.json
+
+      - name: Commit generated catalog and evidence
+        run: |
+          CHANGES="$(git status --porcelain -- data/retail_products_with_images.json audit/MCF-PFV-CATALOG-IMAGES-001/SOURCE-REPORT.md)"
+          if [ -z "$CHANGES" ]; then
+            echo 'Catalog unchanged'
+            exit 0
+          fi
+          printf '%s\n' "$CHANGES"
+          git config user.name 'predix-catalog-bot'
+          git config user.email 'actions@users.noreply.github.com'
+          git add data/retail_products_with_images.json audit/MCF-PFV-CATALOG-IMAGES-001/SOURCE-REPORT.md
+          git commit -m 'data(manoel): gerar 500 produtos distintos com imagens [skip ci]'
+          git push origin HEAD:feat/catalogo-500-produtos-com-imagens
