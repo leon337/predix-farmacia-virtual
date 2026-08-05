@@ -1,7 +1,6 @@
 import { createClient } from "npm:@supabase/supabase-js@2";
 
-// Deployed as predix-api v3.
-// Supabase digest: 54801b70043a895976f7bce0ef1b6a446d8dc5635c23946995d8e4ffb28a3c66
+// Candidate predix-api v4 / semantic version 1.2.0.
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL");
 const SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
 if (!SUPABASE_URL || !SERVICE_ROLE_KEY) throw new Error("Supabase runtime credentials unavailable");
@@ -17,7 +16,7 @@ const corsHeaders = {
   "Cache-Control": "no-store",
 };
 
-const productSelect = "id,sku,name,category,manufacturer,active_ingredient,presentation,price_cents,prescription_required,anvisa_registration,anvisa_process,registration_holder,holder_cnpj,source_url,source_mirror_url,source_updated_at,risk_class,identity_real,operations_simulated,pfv_inventory(total,reserved,minimum)";
+const productSelect = "id,sku,barcode,name,category,manufacturer,active_ingredient,presentation,price_cents,prescription_required,anvisa_registration,anvisa_process,registration_holder,holder_cnpj,source_url,source_mirror_url,source_updated_at,risk_class,identity_real,operations_simulated,image_url,image_source,image_verified_at,source_dataset,pfv_inventory(total,reserved,minimum)";
 
 function response(data: unknown, status = 200): Response {
   return new Response(JSON.stringify(data), {
@@ -58,9 +57,12 @@ function mapProduct(row: Record<string, unknown>) {
   const inventory = normalizeInventory(row.pfv_inventory);
   const hasPrice = row.price_cents !== null && row.price_cents !== undefined;
   const priceCents = hasPrice ? Number(row.price_cents) : null;
+  const barcode = row.barcode ? String(row.barcode) : null;
+  const anvisaRegistration = row.anvisa_registration ? String(row.anvisa_registration) : null;
   return {
     id: Number(row.id),
     sku: row.sku,
+    barcode,
     name: row.name,
     category: row.category,
     manufacturer: row.manufacturer,
@@ -75,8 +77,9 @@ function mapProduct(row: Record<string, unknown>) {
     quantityReserved: inventory.reserved,
     quantityAvailable: inventory.total - inventory.reserved,
     minimum: inventory.minimum,
+    stockIsSimulated: true,
     prescriptionRequired: Boolean(row.prescription_required),
-    anvisaRegistration: row.anvisa_registration,
+    anvisaRegistration,
     anvisaProcess: row.anvisa_process,
     registrationHolder: row.registration_holder,
     holderCnpj: row.holder_cnpj,
@@ -84,6 +87,11 @@ function mapProduct(row: Record<string, unknown>) {
     sourceMirrorUrl: row.source_mirror_url,
     sourceUpdatedAt: row.source_updated_at,
     riskClass: row.risk_class,
+    imageUrl: row.image_url,
+    imageSource: row.image_source,
+    imageVerifiedAt: row.image_verified_at,
+    sourceDataset: row.source_dataset,
+    identitySource: barcode ? "gtin-and-open-beauty-facts" : anvisaRegistration ? "anvisa" : "catalog-source",
     identityReal: Boolean(row.identity_real),
     operationsSimulated: Boolean(row.operations_simulated),
   };
@@ -94,11 +102,11 @@ function safeQuery(value: string): string {
 }
 
 function extractProductTerm(message: string): string {
-  const registration = message.match(/\b\d{8,20}\b/);
-  if (registration) return registration[0];
+  const numericIdentity = message.match(/\b\d{8,20}\b/);
+  if (numericIdentity) return numericIdentity[0];
   return safeQuery(
     message
-      .replace(/\b(qual|quanto|custa|preço|preco|valor|tem|estoque|disponível|disponivel|produto|buscar|procure|reservar|reserve|reserva|registro|anvisa|unidade|unidades|por|favor|do|da|de|o|a|os|as|em)\b/gi, " ")
+      .replace(/\b(qual|quanto|custa|preço|preco|valor|tem|estoque|disponível|disponivel|produto|buscar|procure|reservar|reserve|reserva|registro|anvisa|codigo|código|barras|gtin|unidade|unidades|por|favor|do|da|de|o|a|os|as|em)\b/gi, " ")
       .replace(/[^\p{L}\p{N}\s-]+/gu, " "),
   );
 }
@@ -121,7 +129,7 @@ async function getProducts(query: string, page: number, pageSize: number) {
     .range(from, to);
   const term = safeQuery(query);
   if (term) {
-    builder = builder.or(`name.ilike.%${term}%,sku.ilike.%${term}%,category.ilike.%${term}%,manufacturer.ilike.%${term}%,presentation.ilike.%${term}%,anvisa_registration.ilike.%${term}%`);
+    builder = builder.or(`name.ilike.%${term}%,sku.ilike.%${term}%,barcode.ilike.%${term}%,category.ilike.%${term}%,manufacturer.ilike.%${term}%,presentation.ilike.%${term}%,anvisa_registration.ilike.%${term}%`);
   }
   const { data, error, count } = await builder;
   if (error) throw error;
@@ -133,6 +141,9 @@ async function getProducts(query: string, page: number, pageSize: number) {
     pageSize: normalizedSize,
     total,
     totalPages: Math.ceil(total / normalizedSize),
+    firstRecord: total ? from + 1 : 0,
+    lastRecord: Math.min(to + 1, total),
+    distinctProducts: total,
     identityReal: items.length ? items.every((item) => item.identityReal) : null,
     operationsSimulated: true,
     pricesProvided: items.some((item) => item.priceAvailable),
@@ -185,7 +196,7 @@ async function handleChat(body: Record<string, unknown>): Promise<Response> {
     intent = "greeting";
     tool = "get_company";
     sources = ["database:pfv_company", "treinamento/empresa.md"];
-    assistantMessage = `Olá. Sou o Funcionário Virtual da ${company.name}. Posso consultar produtos para saúde com identidade regulatória real, estoque demonstrativo, horários e reservas simuladas. Preços comerciais não estão cadastrados.`;
+    assistantMessage = `Olá. Sou o Funcionário Virtual da ${company.name}. Posso consultar produtos reais por nome, marca ou código de barras, além do estoque demonstrativo, horários e reservas simuladas. Preços comerciais não estão cadastrados.`;
   } else if (["horário", "horario", "abre", "fecha", "funcionamento"].some((item) => lower.includes(item))) {
     const company = await getCompany();
     intent = "opening_hours";
@@ -204,7 +215,7 @@ async function handleChat(body: Record<string, unknown>): Promise<Response> {
     tool = "get_company";
     sources = ["database:pfv_company", "treinamento/entregas.md"];
     assistantMessage = `${company.delivery}. A operação é simulada.`;
-  } else if (["preço", "preco", "estoque", "disponível", "disponivel", "produto", "reserv", "registro", "anvisa"].some((item) => lower.includes(item))) {
+  } else if (["preço", "preco", "estoque", "disponível", "disponivel", "produto", "reserv", "registro", "anvisa", "barcode", "barras", "gtin"].some((item) => lower.includes(item))) {
     const term = extractProductTerm(message);
     const result = await getProducts(term, 1, 5);
     const product = result.items[0];
@@ -219,24 +230,31 @@ async function handleChat(body: Record<string, unknown>): Promise<Response> {
     if (!product) {
       intent = "product_not_found";
       handoff = true;
-      assistantMessage = `Não encontrei “${term || "o produto informado"}” no catálogo de produtos para saúde.`;
+      assistantMessage = `Não encontrei “${term || "o produto informado"}” no catálogo.`;
     } else {
+      if (product.barcode) sources.push(`gtin:${product.barcode}`);
       if (product.anvisaRegistration) sources.push(`anvisa:registro:${product.anvisaRegistration}`);
+      if (product.sourceDataset) sources.push(`dataset:${product.sourceDataset}`);
       if (lower.includes("reserv")) {
         const quantityMatch = message.match(/\b(\d{1,3})\b/);
         const quantity = Math.max(1, Number(quantityMatch?.[1] ?? 1));
         intent = "reservation_prepare";
-        assistantMessage = `${product.name} possui ${product.quantityAvailable} unidade(s) no estoque demonstrativo. Preparei uma reserva simulada de ${quantity} unidade(s).`;
+        assistantMessage = `${product.name} possui ${product.quantityAvailable} unidade(s) simulada(s) disponíveis. Preparei uma reserva simulada de ${quantity} unidade(s).`;
         data = { product, quantity };
       } else if (["preço", "preco", "valor", "custa"].some((item) => lower.includes(item))) {
         intent = "price_query";
         assistantMessage = product.priceAvailable
           ? `${product.name}: ${product.price}. O estoque e a operação permanecem simulados.`
-          : `${product.name} é um produto real do catálogo regulatório. O preço comercial não está cadastrado neste protótipo; consulte o estabelecimento.`;
+          : `${product.name} é um produto real do catálogo. O preço comercial não está cadastrado neste protótipo; consulte o estabelecimento.`;
         data = { product };
       } else {
         intent = "stock_query";
-        assistantMessage = `${product.name}: ${product.quantityAvailable} unidade(s) no estoque demonstrativo. Registro Anvisa: ${product.anvisaRegistration ?? "não informado"}.`;
+        const identity = product.barcode
+          ? `Código de barras: ${product.barcode}.`
+          : product.anvisaRegistration
+          ? `Registro Anvisa: ${product.anvisaRegistration}.`
+          : "Identidade proveniente da fonte do catálogo.";
+        assistantMessage = `${product.name}: ${product.quantityAvailable} unidade(s) simulada(s) disponíveis. ${identity}`;
         data = { product };
       }
     }
@@ -253,7 +271,7 @@ async function handleChat(body: Record<string, unknown>): Promise<Response> {
 }
 
 async function handleReports(): Promise<Response> {
-  const [attendanceResult, reservationResult, handoffResult, inventoryResult, queriesResult, realResult, priceResult] = await Promise.all([
+  const [attendanceResult, reservationResult, handoffResult, inventoryResult, queriesResult, realResult, priceResult, imageResult, barcodeResult] = await Promise.all([
     db.from("pfv_conversations").select("id", { count: "exact", head: true }),
     db.from("pfv_reservations").select("id", { count: "exact", head: true }),
     db.from("pfv_conversations").select("id", { count: "exact", head: true }).eq("handoff", true),
@@ -261,8 +279,10 @@ async function handleReports(): Promise<Response> {
     db.from("pfv_product_queries").select("product_id").not("product_id", "is", null).limit(1000),
     db.from("pfv_products").select("id", { count: "exact", head: true }).eq("identity_real", true),
     db.from("pfv_products").select("id", { count: "exact", head: true }).is("price_cents", null),
+    db.from("pfv_products").select("id", { count: "exact", head: true }).not("image_url", "is", null),
+    db.from("pfv_products").select("id", { count: "exact", head: true }).not("barcode", "is", null),
   ]);
-  const failures = [attendanceResult.error, reservationResult.error, handoffResult.error, inventoryResult.error, queriesResult.error, realResult.error, priceResult.error].filter(Boolean);
+  const failures = [attendanceResult.error, reservationResult.error, handoffResult.error, inventoryResult.error, queriesResult.error, realResult.error, priceResult.error, imageResult.error, barcodeResult.error].filter(Boolean);
   if (failures.length) throw failures[0];
 
   const counts = new Map<number, number>();
@@ -278,13 +298,18 @@ async function handleReports(): Promise<Response> {
     names = new Map((data ?? []).map((item) => [Number(item.id), String(item.name)]));
   }
 
+  const inventory = inventoryResult.data ?? [];
   return response({
     totalAttendances: Number(attendanceResult.count ?? 0),
     reservations: Number(reservationResult.count ?? 0),
     handoffs: Number(handoffResult.count ?? 0),
-    outOfStockProducts: (inventoryResult.data ?? []).filter((item) => Number(item.total) - Number(item.reserved) <= 0).length,
+    outOfStockProducts: inventory.filter((item) => Number(item.total) - Number(item.reserved) <= 0).length,
     realIdentityProducts: Number(realResult.count ?? 0),
+    distinctProducts: Number(realResult.count ?? 0),
+    productsWithImages: Number(imageResult.count ?? 0),
+    productsWithBarcode: Number(barcodeResult.count ?? 0),
     productsWithoutPrice: Number(priceResult.count ?? 0),
+    stockUnitsSimulated: inventory.reduce((sum, item) => sum + Number(item.total ?? 0), 0),
     mostQueriedProducts: topIds.map(([id, queries]) => ({ name: names.get(id) ?? `Produto ${id}`, queries })),
     identityReal: true,
     operationsSimulated: true,
@@ -292,25 +317,42 @@ async function handleReports(): Promise<Response> {
 }
 
 async function health(): Promise<Response> {
-  const [productsResult, realResult, priceResult] = await Promise.all([
+  const [productsResult, realResult, priceResult, imageResult, barcodeResult, inventoryResult] = await Promise.all([
     db.from("pfv_products").select("id", { count: "exact", head: true }),
     db.from("pfv_products").select("id", { count: "exact", head: true }).eq("identity_real", true),
     db.from("pfv_products").select("id", { count: "exact", head: true }).is("price_cents", null),
+    db.from("pfv_products").select("id", { count: "exact", head: true }).not("image_url", "is", null),
+    db.from("pfv_products").select("id", { count: "exact", head: true }).not("barcode", "is", null),
+    db.from("pfv_inventory").select("total,reserved"),
   ]);
-  const error = productsResult.error || realResult.error || priceResult.error;
+  const error = productsResult.error || realResult.error || priceResult.error || imageResult.error || barcodeResult.error || inventoryResult.error;
   if (error) throw error;
-  const products = Number(productsResult.count ?? 0);
+  const productRecords = Number(productsResult.count ?? 0);
   const realProducts = Number(realResult.count ?? 0);
+  const productsWithImages = Number(imageResult.count ?? 0);
+  const distinctProducts = Number(barcodeResult.count ?? 0) || realProducts;
+  const inventory = inventoryResult.data ?? [];
+  const stockUnitsSimulated = inventory.reduce((sum, item) => sum + Number(item.total ?? 0), 0);
   return response({
     status: "ok",
-    products,
+    products: productRecords,
+    productRecords,
+    distinctProducts,
     realProducts,
+    productsWithImages,
+    productsWithBarcode: Number(barcodeResult.count ?? 0),
     productsWithoutPrice: Number(priceResult.count ?? 0),
-    catalogIdentity: products === 500 && realProducts === products ? "real" : "transition",
+    inventoryRows: inventory.length,
+    stockUnitsSimulated,
+    catalogIdentity: productRecords === 500 && realProducts === 500 && productsWithImages === 500 && Number(barcodeResult.count ?? 0) === 500
+      ? "real-with-images"
+      : "transition",
+    productCountMeaning: "distinct-product-records",
+    stockCountMeaning: "simulated-units",
     operations: "simulated",
     prices: "not-provided",
     database: "supabase-postgres",
-    version: "1.1.1",
+    version: "1.2.0",
   });
 }
 

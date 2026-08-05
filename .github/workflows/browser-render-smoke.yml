@@ -13,12 +13,12 @@ permissions:
 jobs:
   validate-browser-render:
     runs-on: ubuntu-latest
-    timeout-minutes: 12
+    timeout-minutes: 15
     env:
       WEB_URL: https://predix-farmacia-virtual.onrender.com
       LEGACY_URL: https://qylqyhxpwffiripcpjej.supabase.co/functions/v1/predix-farmacia
       API_HEALTH: https://qylqyhxpwffiripcpjej.supabase.co/functions/v1/predix-api/api/health
-      API_PRODUCTS: https://qylqyhxpwffiripcpjej.supabase.co/functions/v1/predix-api/api/products?page=1&pageSize=1
+      API_PRODUCTS: https://qylqyhxpwffiripcpjej.supabase.co/functions/v1/predix-api/api/products?page=1&pageSize=24
     steps:
       - uses: actions/checkout@v4
 
@@ -26,16 +26,18 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          target="${WEB_URL}/?build=${GITHUB_SHA}&attempt=${GITHUB_RUN_ATTEMPT}"
+          target="${WEB_URL}/?view=catalog&build=${GITHUB_SHA}&attempt=${GITHUB_RUN_ATTEMPT}"
           ready=false
-          for attempt in $(seq 1 36); do
+          for attempt in $(seq 1 48); do
             printf 'FRONTEND_POLL attempt=%s target=%s\n' "$attempt" "$target"
             if curl --fail --silent --show-error --location \
               --header 'Cache-Control: no-cache, no-store, must-revalidate' \
               --header 'Pragma: no-cache' \
               "$target" --output deployed.html; then
-              if grep --quiet 'CATÁLOGO COM IDENTIDADE REAL' deployed.html \
-                && grep --quiet 'produtos possuem identidade real' deployed.html; then
+              if grep --quiet 'CATÁLOGO COM IDENTIDADE E IMAGEM REAL' deployed.html \
+                && grep --quiet 'unidades simuladas em estoque' deployed.html \
+                && grep --quiet 'images.openbeautyfacts.org' deployed.html \
+                && grep --quiet 'catalog-images-20260805-1' deployed.html; then
                 ready=true
                 break
               fi
@@ -44,8 +46,8 @@ jobs:
           done
           test "$ready" = true
           grep --quiet 'Predix Farmácia Virtual' deployed.html
+          ! grep --quiet 'startup.js' deployed.html
           ! grep --quiet 'CATÁLOGO SINTÉTICO' deployed.html
-          ! grep -Eqi 'Demo [0-9]{3}|Composto demonstrativo|Predix Labs Simulação|Farma Exemplo Fictícia' deployed.html
           printf 'TARGET_URL=%s\n' "$target" >> "$GITHUB_ENV"
           printf 'FRONTEND_CANDIDATE_READY=PASS\n'
 
@@ -59,7 +61,6 @@ jobs:
             "$TARGET_URL" | tr -d '\r')"
           printf '%s\n' "$headers"
           content_type="$(printf '%s\n' "$headers" | awk -F': ' 'tolower($1)=="content-type" {print tolower($2)}' | tail -1)"
-          test -n "$content_type"
           case "$content_type" in
             text/html*) ;;
             *) echo "INVALID_CONTENT_TYPE=$content_type"; exit 1 ;;
@@ -70,17 +71,12 @@ jobs:
         run: |
           set -euo pipefail
           headers="$(curl --silent --show-error --head "$LEGACY_URL" | tr -d '\r')"
-          printf '%s\n' "$headers"
           status="$(printf '%s\n' "$headers" | awk 'NR==1 {print $2}')"
           location="$(printf '%s\n' "$headers" | awk -F': ' 'tolower($1)=="location" {print $2}' | tail -1)"
-          case "$status" in
-            301|302|307|308) ;;
-            *) echo "INVALID_LEGACY_STATUS=$status"; exit 1 ;;
-          esac
+          case "$status" in 301|302|307|308) ;; *) exit 1 ;; esac
           test "$location" = "$WEB_URL"
-          printf 'LEGACY_REDIRECT=PASS\n'
 
-      - name: Validate API real catalog
+      - name: Validate API catalog and sample image
         shell: bash
         run: |
           set -euo pipefail
@@ -92,22 +88,35 @@ jobs:
           health = json.load(open('health.json', encoding='utf-8'))
           catalog = json.load(open('product.json', encoding='utf-8'))
           assert health['status'] == 'ok', health
-          assert health['products'] == 500, health
-          assert health['realProducts'] == 500, health
-          assert health['productsWithoutPrice'] == 500, health
-          assert health['catalogIdentity'] == 'real', health
-          assert health['database'] == 'supabase-postgres', health
-          product = catalog['items'][0]
-          assert product['identityReal'] is True, product
-          assert product['operationsSimulated'] is True, product
-          assert product['anvisaRegistration'], product
-          assert product['priceCents'] is None, product
-          assert product['price'] == 'Consulte o estabelecimento', product
-          assert not re.search(r'Demo\s+\d{3}', product['name'], re.I), product
-          print(json.dumps({'health': health, 'sample': product}, ensure_ascii=False, indent=2))
+          assert health['productRecords'] == 500, health
+          assert health['distinctProducts'] == 500, health
+          assert health['productsWithImages'] == 500, health
+          assert health['productsWithBarcode'] == 500, health
+          assert health['stockUnitsSimulated'] > 500, health
+          assert health['catalogIdentity'] == 'real-with-images', health
+          assert health['productCountMeaning'] == 'distinct-product-records', health
+          assert health['stockCountMeaning'] == 'simulated-units', health
+          assert len(catalog['items']) == 24, catalog
+          assert catalog['total'] == 500, catalog
+          assert catalog['firstRecord'] == 1, catalog
+          assert catalog['lastRecord'] == 24, catalog
+          for product in catalog['items']:
+              assert re.fullmatch(r'\d{8,14}', product['barcode']), product
+              assert product['imageUrl'].startswith('https://images.openbeautyfacts.org/'), product
+              assert product['imageSource'] == 'Open Beauty Facts', product
+              assert product['stockIsSimulated'] is True, product
+              assert product['priceCents'] is None, product
+          print(json.dumps({'health': health, 'sample': catalog['items'][0]}, ensure_ascii=False, indent=2))
           PY
+          image_url="$(python -c "import json; print(json.load(open('product.json'))['items'][0]['imageUrl'])")"
+          curl --fail --silent --show-error --location \
+            --header 'Accept: image/*' \
+            --header 'User-Agent: PredixBrowserSmoke/1.0' \
+            "$image_url" --output sample-product-image.bin
+          test "$(stat -c%s sample-product-image.bin)" -gt 1000
+          file sample-product-image.bin | grep -Eqi 'image|jpeg|png|webp'
 
-      - name: Render with headless Chrome
+      - name: Render catalog with headless Chrome
         shell: bash
         run: |
           set -euo pipefail
@@ -120,9 +129,10 @@ jobs:
             --hide-scrollbars \
             --disable-cache \
             --disk-cache-size=1 \
-            --window-size=390,844 \
-            --virtual-time-budget=15000 \
-            --screenshot=predix-mobile-real-catalog.png \
+            --run-all-compositor-stages-before-draw \
+            --window-size=390,1200 \
+            --virtual-time-budget=30000 \
+            --screenshot=predix-mobile-products-with-images.png \
             "$TARGET_URL"
           "$browser" \
             --headless \
@@ -130,35 +140,66 @@ jobs:
             --disable-gpu \
             --disable-cache \
             --disk-cache-size=1 \
-            --virtual-time-budget=15000 \
+            --virtual-time-budget=30000 \
             --dump-dom \
             "$TARGET_URL" > rendered.html
-          grep --quiet 'Predix Farmácia Virtual' rendered.html
-          grep --quiet 'PostgreSQL conectado' rendered.html
-          grep --quiet '500 produtos reais' rendered.html
-          grep --quiet 'CATÁLOGO COM IDENTIDADE REAL' rendered.html
-          grep --quiet 'Registro Anvisa' rendered.html
-          grep --quiet 'Consulte o estabelecimento' rendered.html
-          grep --quiet 'FUNCIONÁRIO VIRTUAL' rendered.html
-          ! grep --quiet 'CATÁLOGO SINTÉTICO' rendered.html
-          ! grep -Eqi 'Demo [0-9]{3}|Composto demonstrativo|Predix Labs Simulação|Farma Exemplo Fictícia' rendered.html
-          if grep --quiet '&lt;!doctype html&gt;' rendered.html; then
-            echo 'RAW_HTML_VISIBLE=true'
-            exit 1
-          fi
-          test -s predix-mobile-real-catalog.png
-          printf 'BROWSER_RENDER=PASS\nMOBILE_SCREENSHOT=PASS\nREAL_CATALOG_VISIBLE=true\nRAW_HTML_VISIBLE=false\n'
+          python - <<'PY'
+          import re
+          from html.parser import HTMLParser
+          from pathlib import Path
+
+          class TextCollector(HTMLParser):
+              def __init__(self):
+                  super().__init__()
+                  self.parts = []
+              def handle_data(self, data):
+                  self.parts.append(data)
+
+          html = Path('rendered.html').read_text(encoding='utf-8')
+          collector = TextCollector()
+          collector.feed(html)
+          visible = re.sub(r'\s+', ' ', ' '.join(collector.parts)).strip()
+          product_titles = [
+              re.sub(r'\s+', ' ', title).strip()
+              for title in re.findall(r'<h3>([^<]*)</h3>', html, re.IGNORECASE)
+          ]
+
+          assert 'Predix Farmácia Virtual' in visible
+          assert 'PostgreSQL conectado' in visible
+          assert '500 produtos distintos' in visible
+          assert '500 produtos com imagem' in visible
+          assert 'unidades simuladas em estoque' in visible
+          assert 'CATÁLOGO COM IDENTIDADE E IMAGEM REAL' in visible
+          assert 'Código de barras:' in visible
+          assert 'Imagem: Open Beauty Facts' in visible
+          assert 'unidades simuladas disponíveis' in visible
+          assert 'Produtos 1–24 de 500' in visible
+          assert html.count('class="product-card"') == 24, html.count('class="product-card"')
+          assert html.count('class="product-image"') == 24, html.count('class="product-image"')
+          assert html.count('https://images.openbeautyfacts.org/') >= 24
+          assert html.count('data-real-source="true"') == 24
+          assert 'data-load-error="true"' not in html
+          assert len(product_titles) == 24, product_titles
+          assert not any(re.fullmatch(r'Demo\s+\d{3}', title, re.IGNORECASE) for title in product_titles)
+          assert 'CATÁLOGO SINTÉTICO' not in visible
+          assert not re.search(r'Composto demonstrativo|Predix Labs Simulação|Farma Exemplo Fictícia', visible, re.I)
+          assert '&lt;!doctype html&gt;' not in html
+          print('DOM_IMAGES_PASS cards=24 external_images=24 fallback_errors=0')
+          PY
+          test -s predix-mobile-products-with-images.png
+          printf 'BROWSER_RENDER=PASS\nMOBILE_SCREENSHOT=PASS\nPRODUCT_IMAGES_VISIBLE=true\nPRODUCT_RECORDS=500\n'
 
       - name: Upload browser evidence
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: predix-real-catalog-browser-evidence
+          name: predix-500-products-images-browser-evidence
           path: |
-            predix-mobile-real-catalog.png
+            predix-mobile-products-with-images.png
             rendered.html
             deployed.html
             health.json
             product.json
+            sample-product-image.bin
           if-no-files-found: warn
           retention-days: 30

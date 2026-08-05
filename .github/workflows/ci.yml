@@ -2,7 +2,7 @@ name: CI
 
 on:
   push:
-    branches: [main, feat/mvp-funcionario-virtual, feat/catalogo-real-anvisa]
+    branches: [main, feat/mvp-funcionario-virtual, feat/catalogo-real-anvisa, feat/catalogo-500-produtos-com-imagens]
   pull_request:
     branches: [main]
 
@@ -12,35 +12,38 @@ permissions:
 jobs:
   validate:
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 12
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with:
           python-version: '3.12'
-      - name: Compile
+
+      - name: Compile Python
         run: python -m compileall -q app.py tests scripts
-      - name: Validate catalog artifact
+
+      - name: Validate browser JavaScript
+        run: node --check public/app.js
+
+      - name: Independently validate 500 distinct products with images
+        run: python scripts/validate_retail_catalog.py
+
+      - name: Validate frontend contract
         run: |
-          python - <<'PY'
-          import hashlib
-          import json
-          from pathlib import Path
-          path = Path('data/real_products.json')
-          raw = path.read_bytes()
-          assert hashlib.sha256(raw).hexdigest() == '322a842080af74e1cafeea0a98f0ea71a930ac442eadb1d6d9911e15b9b7cf34'
-          payload = json.loads(raw)
-          products = payload['products']
-          assert len(products) == 500
-          assert all(p['anvisaRegistration'] and p['manufacturer'] for p in products)
-          assert all(p['priceCents'] is None for p in products)
-          assert all(p['activeIngredient'] is None for p in products)
-          assert not any('Demo ' in p['name'] for p in products)
-          print('CATALOG_PASS products=500 identities=real prices=absent')
-          PY
-      - name: Test MVP
+          grep --quiet 'CATÁLOGO COM IDENTIDADE E IMAGEM REAL' public/index.html
+          grep --quiet 'produtos distintos' public/index.html
+          grep --quiet 'unidades simuladas em estoque' public/index.html
+          grep --quiet 'images.openbeautyfacts.org' public/index.html
+          grep --quiet 'catalog-images-20260805-1' public/index.html
+          ! grep --quiet 'startup.js' public/index.html
+          grep --quiet 'product-image' public/app.js
+          grep --quiet 'stockUnitsSimulated' public/app.js
+          grep --quiet 'unidades simuladas disponíveis' public/app.js
+
+      - name: Test local MVP
         run: python -m unittest discover -s tests -v
-      - name: Smoke HTTP
+
+      - name: Smoke local HTTP
         run: |
           rm -f /tmp/predix-ci.db
           PREDIX_DATABASE_PATH=/tmp/predix-ci.db python app.py >/tmp/predix.log 2>&1 &
@@ -60,15 +63,13 @@ jobs:
           assert health['status'] == 'ok', health
           assert health['products'] == 500, health
           assert health['realProducts'] == 500, health
-          assert health['productsWithoutPrice'] == 500, health
-          assert health['catalogIdentity'] == 'real', health
           product = catalog['items'][0]
           assert product['identityReal'] is True, product
           assert product['operationsSimulated'] is True, product
-          assert product['anvisaRegistration'], product
           assert product['priceCents'] is None, product
           assert product['price'] == 'Consulte o estabelecimento', product
           assert 'Demo ' not in product['name'], product
-          print('SMOKE_PASS products=500 identities=real prices=absent')
+          assert product.get('anvisaRegistration') or product.get('barcode') or product.get('sku'), product
+          print('LOCAL_SMOKE_PASS products=500 identity=real')
           PY
-          curl --fail --silent http://127.0.0.1:8000/ | grep --quiet 'CATÁLOGO COM IDENTIDADE REAL'
+          curl --fail --silent http://127.0.0.1:8000/ | grep --quiet 'CATÁLOGO COM IDENTIDADE E IMAGEM REAL'
