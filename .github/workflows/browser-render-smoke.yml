@@ -16,6 +16,7 @@ jobs:
     timeout-minutes: 10
     env:
       WEB_URL: https://predix-farmacia-virtual.onrender.com
+      LEGACY_URL: https://qylqyhxpwffiripcpjej.supabase.co/functions/v1/predix-farmacia
       API_HEALTH: https://qylqyhxpwffiripcpjej.supabase.co/functions/v1/predix-api/api/health
     steps:
       - uses: actions/checkout@v4
@@ -32,6 +33,21 @@ jobs:
             text/html*) ;;
             *) echo "INVALID_CONTENT_TYPE=$content_type"; exit 1 ;;
           esac
+
+      - name: Validate legacy redirect
+        shell: bash
+        run: |
+          set -euo pipefail
+          headers="$(curl --silent --show-error --head "$LEGACY_URL" | tr -d '\r')"
+          printf '%s\n' "$headers"
+          status="$(printf '%s\n' "$headers" | awk 'NR==1 {print $2}')"
+          location="$(printf '%s\n' "$headers" | awk -F': ' 'tolower($1)=="location" {print $2}' | tail -1)"
+          case "$status" in
+            301|302|307|308) ;;
+            *) echo "INVALID_LEGACY_STATUS=$status"; exit 1 ;;
+          esac
+          test "$location" = "$WEB_URL"
+          printf 'LEGACY_REDIRECT=PASS\n'
 
       - name: Validate API health
         shell: bash
