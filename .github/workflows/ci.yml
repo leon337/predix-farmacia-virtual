@@ -2,7 +2,7 @@ name: CI
 
 on:
   push:
-    branches: [main, feat/mvp-funcionario-virtual]
+    branches: [main, feat/mvp-funcionario-virtual, feat/catalogo-real-anvisa]
   pull_request:
     branches: [main]
 
@@ -19,7 +19,25 @@ jobs:
         with:
           python-version: '3.12'
       - name: Compile
-        run: python -m compileall -q app.py tests
+        run: python -m compileall -q app.py tests scripts
+      - name: Validate catalog artifact
+        run: |
+          python - <<'PY'
+          import hashlib
+          import json
+          from pathlib import Path
+          path = Path('data/real_products.json')
+          raw = path.read_bytes()
+          assert hashlib.sha256(raw).hexdigest() == '322a842080af74e1cafeea0a98f0ea71a930ac442eadb1d6d9911e15b9b7cf34'
+          payload = json.loads(raw)
+          products = payload['products']
+          assert len(products) == 500
+          assert all(p['anvisaRegistration'] and p['manufacturer'] for p in products)
+          assert all(p['priceCents'] is None for p in products)
+          assert all(p['activeIngredient'] is None for p in products)
+          assert not any('Demo ' in p['name'] for p in products)
+          print('CATALOG_PASS products=500 identities=real prices=absent')
+          PY
       - name: Test MVP
         run: python -m unittest discover -s tests -v
       - name: Smoke HTTP
@@ -34,5 +52,23 @@ jobs:
             fi
             sleep 1
           done
-          python -c "import json; value=json.load(open('/tmp/predix-health.json')); assert value == {'status':'ok','products':500,'isDemo':True}; print('SMOKE_PASS products=500')"
-          curl --fail --silent http://127.0.0.1:8000/ | grep --quiet 'FUNCIONÁRIO VIRTUAL'
+          curl --fail --silent --show-error 'http://127.0.0.1:8000/api/products?page=1&pageSize=1' > /tmp/predix-products.json
+          python - <<'PY'
+          import json
+          health = json.load(open('/tmp/predix-health.json', encoding='utf-8'))
+          catalog = json.load(open('/tmp/predix-products.json', encoding='utf-8'))
+          assert health['status'] == 'ok', health
+          assert health['products'] == 500, health
+          assert health['realProducts'] == 500, health
+          assert health['productsWithoutPrice'] == 500, health
+          assert health['catalogIdentity'] == 'real', health
+          product = catalog['items'][0]
+          assert product['identityReal'] is True, product
+          assert product['operationsSimulated'] is True, product
+          assert product['anvisaRegistration'], product
+          assert product['priceCents'] is None, product
+          assert product['price'] == 'Consulte o estabelecimento', product
+          assert 'Demo ' not in product['name'], product
+          print('SMOKE_PASS products=500 identities=real prices=absent')
+          PY
+          curl --fail --silent http://127.0.0.1:8000/ | grep --quiet 'CATÁLOGO COM IDENTIDADE REAL'
