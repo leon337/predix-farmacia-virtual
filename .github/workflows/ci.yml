@@ -24,25 +24,15 @@ jobs:
         run: python -m unittest discover -s tests -v
       - name: Smoke HTTP
         run: |
+          rm -f /tmp/predix-ci.db
           PREDIX_DATABASE_PATH=/tmp/predix-ci.db python app.py >/tmp/predix.log 2>&1 &
           server_pid=$!
           trap 'kill $server_pid 2>/dev/null || true' EXIT
           for attempt in $(seq 1 20); do
-            python - <<'PY' && break
-import json
-from urllib.request import urlopen
-with urlopen('http://127.0.0.1:8000/api/health', timeout=2) as response:
-    value = json.load(response)
-assert value['status'] == 'ok'
-assert value['products'] == 500
-PY
+            if curl --fail --silent --show-error http://127.0.0.1:8000/api/health > /tmp/predix-health.json; then
+              break
+            fi
             sleep 1
           done
-          python - <<'PY'
-import json
-from urllib.request import urlopen
-with urlopen('http://127.0.0.1:8000/api/health', timeout=2) as response:
-    value = json.load(response)
-assert value == {'status': 'ok', 'products': 500, 'isDemo': True}
-print('SMOKE_PASS products=500')
-PY
+          python -c "import json; value=json.load(open('/tmp/predix-health.json')); assert value == {'status':'ok','products':500,'isDemo':True}; print('SMOKE_PASS products=500')"
+          curl --fail --silent http://127.0.0.1:8000/ | grep --quiet 'FUNCIONÁRIO VIRTUAL'
