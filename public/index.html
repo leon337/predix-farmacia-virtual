@@ -1,0 +1,124 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="description" content="Predix Farmácia Virtual — ambiente fictício para demonstração do Funcionário Virtual Predix.">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; connect-src 'self' https://qylqyhxpwffiripcpjej.supabase.co; style-src 'self'; script-src 'self'; img-src 'self' data:; object-src 'none'; base-uri 'none'; frame-ancestors 'none'">
+  <title>Predix Farmácia Virtual</title>
+  <link rel="stylesheet" href="styles.css">
+  <script src="app.js" defer></script>
+</head>
+<body>
+  <header class="topbar">
+    <div>
+      <p class="eyebrow">PREDIX AI • AMBIENTE FICTÍCIO</p>
+      <h1 id="company-name">Predix Farmácia Virtual</h1>
+      <p id="company-status" class="status">Conectando ao PostgreSQL…</p>
+    </div>
+    <span class="demo-badge">DEMONSTRAÇÃO</span>
+  </header>
+
+  <div class="safety-banner" role="note">
+    Este sistema não vende medicamentos, não processa pagamentos ou receitas e não fornece orientação clínica.
+  </div>
+
+  <nav class="tabs" aria-label="Áreas do sistema">
+    <button class="tab active" data-view="chat" type="button">Atendimento</button>
+    <button class="tab" data-view="catalog" type="button">Catálogo</button>
+    <button class="tab" data-view="reservation" type="button">Reserva</button>
+    <button class="tab" data-view="reports" type="button">Relatórios</button>
+  </nav>
+
+  <main>
+    <section id="view-chat" class="view active">
+      <div class="two-columns">
+        <article class="panel">
+          <p class="eyebrow">FUNCIONÁRIO VIRTUAL</p>
+          <h2>Balcão digital</h2>
+          <div id="chat-log" class="chat-log" aria-live="polite">
+            <div class="message assistant">
+              <strong>Funcionário Virtual</strong>
+              <p>Olá. Posso consultar produtos, preços, estoque, horários e preparar reservas simuladas.</p>
+              <small>Fonte: política do ambiente demonstrativo</small>
+            </div>
+          </div>
+          <form id="chat-form" class="inline-form">
+            <label class="sr-only" for="chat-input">Mensagem</label>
+            <input id="chat-input" maxlength="500" placeholder="Ex.: qual o preço do produto Demo 001?" required>
+            <button type="submit">Enviar</button>
+          </form>
+        </article>
+
+        <aside class="panel">
+          <p class="eyebrow">SOBRE A EMPRESA</p>
+          <h2>Dados consultados em tempo real</h2>
+          <div id="company-details" class="details"></div>
+        </aside>
+      </div>
+    </section>
+
+    <section id="view-catalog" class="view" hidden>
+      <article class="panel">
+        <div class="section-heading">
+          <div>
+            <p class="eyebrow">CATÁLOGO SINTÉTICO</p>
+            <h2>Produtos demonstrativos</h2>
+          </div>
+          <span id="catalog-count" class="counter">Carregando…</span>
+        </div>
+        <form id="catalog-form" class="inline-form">
+          <label class="sr-only" for="catalog-query">Buscar no catálogo</label>
+          <input id="catalog-query" placeholder="Nome, SKU, fabricante, categoria ou princípio ativo">
+          <button type="submit">Buscar</button>
+        </form>
+        <div id="catalog-grid" class="catalog-grid" aria-live="polite"></div>
+        <div class="pagination">
+          <button id="prev-page" type="button">Anterior</button>
+          <span id="page-status">Página 1</span>
+          <button id="next-page" type="button">Próxima</button>
+        </div>
+      </article>
+    </section>
+
+    <section id="view-reservation" class="view" hidden>
+      <article class="panel form-panel">
+        <p class="eyebrow">RESERVA SIMULADA</p>
+        <h2>Preparar uma reserva</h2>
+        <p class="status">A reserva é fictícia, não gera venda, cobrança ou entrega.</p>
+        <form id="reservation-form" class="stack-form">
+          <label>Nome fictício
+            <input id="reservation-customer" maxlength="120" placeholder="Cliente Demo" required>
+          </label>
+          <label>ID do produto
+            <input id="reservation-product" type="number" min="1" required>
+          </label>
+          <label>Quantidade
+            <input id="reservation-quantity" type="number" min="1" max="50" value="1" required>
+          </label>
+          <button type="submit">Criar reserva simulada</button>
+        </form>
+        <div id="reservation-result" class="result" aria-live="polite"></div>
+      </article>
+    </section>
+
+    <section id="view-reports" class="view" hidden>
+      <article class="panel">
+        <div class="section-heading">
+          <div>
+            <p class="eyebrow">INDICADORES</p>
+            <h2>Relatórios do ambiente</h2>
+          </div>
+          <button id="refresh-reports" type="button">Atualizar</button>
+        </div>
+        <div id="report-cards" class="report-cards"></div>
+        <div id="top-products" class="table-wrap"></div>
+      </article>
+    </section>
+  </main>
+
+  <footer>
+    Todos os produtos, pessoas, contatos, reservas e operações apresentados são fictícios.
+  </footer>
+</body>
+</html>
