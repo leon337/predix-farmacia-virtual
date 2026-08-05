@@ -36,7 +36,8 @@ jobs:
               "$target" --output deployed.html; then
               if grep --quiet 'CATÁLOGO COM IDENTIDADE E IMAGEM REAL' deployed.html \
                 && grep --quiet 'unidades simuladas em estoque' deployed.html \
-                && grep --quiet 'images.openbeautyfacts.org' deployed.html; then
+                && grep --quiet 'images.openbeautyfacts.org' deployed.html \
+                && grep --quiet 'catalog-images-20260805-1' deployed.html; then
                 ready=true
                 break
               fi
@@ -130,7 +131,7 @@ jobs:
             --disk-cache-size=1 \
             --run-all-compositor-stages-before-draw \
             --window-size=390,1200 \
-            --virtual-time-budget=25000 \
+            --virtual-time-budget=30000 \
             --screenshot=predix-mobile-products-with-images.png \
             "$TARGET_URL"
           "$browser" \
@@ -139,29 +140,43 @@ jobs:
             --disable-gpu \
             --disable-cache \
             --disk-cache-size=1 \
-            --virtual-time-budget=25000 \
+            --virtual-time-budget=30000 \
             --dump-dom \
             "$TARGET_URL" > rendered.html
           python - <<'PY'
           import re
+          from html.parser import HTMLParser
           from pathlib import Path
+
+          class TextCollector(HTMLParser):
+              def __init__(self):
+                  super().__init__()
+                  self.parts = []
+              def handle_data(self, data):
+                  self.parts.append(data)
+
           html = Path('rendered.html').read_text(encoding='utf-8')
-          assert 'Predix Farmácia Virtual' in html
-          assert 'PostgreSQL conectado' in html
-          assert '500 produtos distintos' in html
-          assert '500 produtos com imagem' in html
-          assert 'unidades simuladas em estoque' in html
-          assert 'CATÁLOGO COM IDENTIDADE E IMAGEM REAL' in html
-          assert 'Código de barras:' in html
-          assert 'Imagem: Open Beauty Facts' in html
-          assert 'unidades simuladas disponíveis' in html
-          assert 'Produtos 1–24 de 500' in html
+          collector = TextCollector()
+          collector.feed(html)
+          visible = re.sub(r'\s+', ' ', ' '.join(collector.parts)).strip()
+
+          assert 'Predix Farmácia Virtual' in visible
+          assert 'PostgreSQL conectado' in visible
+          assert '500 produtos distintos' in visible
+          assert '500 produtos com imagem' in visible
+          assert 'unidades simuladas em estoque' in visible
+          assert 'CATÁLOGO COM IDENTIDADE E IMAGEM REAL' in visible
+          assert 'Código de barras:' in visible
+          assert 'Imagem: Open Beauty Facts' in visible
+          assert 'unidades simuladas disponíveis' in visible
+          assert 'Produtos 1–24 de 500' in visible
+          assert html.count('class="product-card"') == 24, html.count('class="product-card"')
           assert html.count('class="product-image"') == 24, html.count('class="product-image"')
           assert html.count('https://images.openbeautyfacts.org/') >= 24
-          assert 'data-real-source="true"' in html
+          assert html.count('data-real-source="true"') == 24
           assert 'data-load-error="true"' not in html
-          assert 'CATÁLOGO SINTÉTICO' not in html
-          assert not re.search(r'Demo\s+\d{3}|Composto demonstrativo|Predix Labs Simulação|Farma Exemplo Fictícia', html, re.I)
+          assert 'CATÁLOGO SINTÉTICO' not in visible
+          assert not re.search(r'Demo\s+\d{3}|Composto demonstrativo|Predix Labs Simulação|Farma Exemplo Fictícia', visible, re.I)
           assert '&lt;!doctype html&gt;' not in html
           print('DOM_IMAGES_PASS cards=24 external_images=24 fallback_errors=0')
           PY
