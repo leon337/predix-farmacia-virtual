@@ -1,0 +1,76 @@
+name: Catalogo Real Anvisa
+
+on:
+  push:
+    branches:
+      - feat/catalogo-real-anvisa
+    paths:
+      - scripts/build_real_catalog.py
+      - .github/workflows/catalog-real-import.yml
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build-real-catalog:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout branch
+        uses: actions/checkout@v4
+        with:
+          ref: feat/catalogo-real-anvisa
+          fetch-depth: 0
+
+      - name: Download health-products mirror
+        run: |
+          curl --fail --location --retry 3 --retry-delay 5 --max-time 300 \
+            'https://huggingface.co/datasets/Guibiagi/anvisa-rfb-corpus/resolve/main/anvisa_produtos_saude.jsonl?download=true' \
+            --output /tmp/anvisa_produtos_saude.jsonl
+          test "$(stat -c%s /tmp/anvisa_produtos_saude.jsonl)" -gt 1000000
+          echo 'd20df633de53a2c79a2efa03ebae61db72fcb7e27941f23993784f179130f173  /tmp/anvisa_produtos_saude.jsonl' | sha256sum --check --strict
+
+      - name: Generate real catalog
+        run: python3 scripts/build_real_catalog.py --input /tmp/anvisa_produtos_saude.jsonl
+
+      - name: Validate catalog structure
+        run: |
+          python3 - <<'PY'
+          import json
+          from pathlib import Path
+          payload = json.loads(Path('data/real_products.json').read_text(encoding='utf-8'))
+          products = payload['products']
+          meta = payload['meta']
+          assert len(products) == 500, len(products)
+          assert meta['identityIsReal'] is True
+          assert meta['operationsAreSimulated'] is True
+          assert meta['pricesAreUnavailable'] is True
+          assert len({p['sku'] for p in products}) == 500
+          assert len({(p['anvisaRegistration'], p['name'], p['manufacturer']) for p in products}) == 500
+          assert all(p['name'] and p['manufacturer'] and p['anvisaRegistration'] for p in products)
+          assert all(p['activeIngredient'] is None for p in products)
+          assert all(p['priceCents'] is None for p in products)
+          assert all(p['prescriptionRequired'] is False for p in products)
+          assert all(p['riskClass'] in ('I', 'II', '1', '2') for p in products)
+          assert all(p['sourceUrl'] == 'https://dados.anvisa.gov.br/dados/TA_PRODUTO_SAUDE_SITE.csv' for p in products)
+          print({'products': len(products), 'categories': sorted({p['category'] for p in products}), 'statistics': meta['statistics']})
+          PY
+
+      - name: Prevent synthetic or restricted catalog entries
+        run: |
+          ! grep -Eqi 'Demo [0-9]{3}|Composto demonstrativo|Predix Labs Simulação|Farma Exemplo Fictícia' data/real_products.json
+          ! grep -Eqi '"presentation": ".*(Agulha|Cateter|Sonda|Seringa|Implante|Stent)' data/real_products.json
+
+      - name: Commit generated evidence
+        run: |
+          CHANGES="$(git status --porcelain -- data/real_products.json audit/MCF-PFV-CATALOG-REAL-001/SOURCE-REPORT.md)"
+          if [ -z "$CHANGES" ]; then
+            echo 'Catalog unchanged'
+            exit 0
+          fi
+          printf '%s\n' "$CHANGES"
+          git config user.name 'predix-catalog-bot'
+          git config user.email 'actions@users.noreply.github.com'
+          git add data/real_products.json audit/MCF-PFV-CATALOG-REAL-001/SOURCE-REPORT.md
+          git commit -m 'data(manoel): gerar 500 produtos reais da Anvisa [skip ci]'
+          git push origin HEAD:feat/catalogo-real-anvisa

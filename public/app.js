@@ -12,9 +12,7 @@ async function api(path, options = {}) {
     },
   });
   const data = await response.json().catch(() => ({}));
-  if (!response.ok) {
-    throw new Error(data.error || data.message || `Erro HTTP ${response.status}`);
-  }
+  if (!response.ok) throw new Error(data.error || data.message || `Erro HTTP ${response.status}`);
   return data;
 }
 
@@ -43,18 +41,19 @@ document.querySelectorAll('.tab').forEach((button) => {
 });
 
 async function loadCompany() {
-  const company = await api('/api/company');
+  const [company, health] = await Promise.all([api('/api/company'), api('/api/health')]);
   document.querySelector('#company-name').textContent = company.name;
-  document.querySelector('#company-status').textContent = `${company.openingHours} • PostgreSQL conectado`;
+  document.querySelector('#company-status').textContent = `${company.openingHours} • ${health.realProducts} produtos reais • PostgreSQL conectado`;
 
   const details = document.querySelector('#company-details');
   details.replaceChildren();
   [
-    ['Endereço', company.address],
-    ['Telefone', company.phone],
+    ['Endereço demonstrativo', company.address],
+    ['Telefone demonstrativo', company.phone],
     ['Funcionamento', company.openingHours],
-    ['Pagamentos', company.payments],
-    ['Entregas', company.delivery],
+    ['Pagamentos simulados', company.payments],
+    ['Entregas simuladas', company.delivery],
+    ['Catálogo', `${health.realProducts} identidades reais; preços comerciais não cadastrados`],
   ].forEach(([label, value]) => {
     const item = document.createElement('div');
     item.append(textElement('strong', label), textElement('span', value));
@@ -69,7 +68,7 @@ function addMessage(role, message, sources = [], handoff = false) {
   item.append(textElement('strong', role === 'user' ? 'Você' : 'Funcionário Virtual'));
   item.append(textElement('p', message));
   if (sources.length) item.append(textElement('small', `Fontes: ${sources.join(', ')}`));
-  if (handoff) item.append(textElement('small', 'Encaminhamento humano fictício registrado'));
+  if (handoff) item.append(textElement('small', 'Encaminhamento humano demonstrativo registrado'));
   container.append(item);
   container.scrollTop = container.scrollHeight;
 }
@@ -109,23 +108,23 @@ function productCard(product) {
   card.append(textElement('span', `${product.sku} • ID ${product.id}`, 'tag'));
   card.append(textElement('h3', product.name));
   card.append(textElement('p', `${product.category} • ${product.manufacturer}`));
-  card.append(textElement('p', `${product.activeIngredient} • ${product.presentation}`));
+  card.append(textElement('p', `Apresentação técnica: ${product.presentation}`));
+  card.append(textElement('p', `Registro Anvisa: ${product.anvisaRegistration} • Classe de risco: ${product.riskClass}`));
 
   const meta = document.createElement('div');
   meta.className = 'product-meta';
   meta.append(textElement('strong', product.price));
   meta.append(textElement(
     'span',
-    product.quantityAvailable > 0 ? `${product.quantityAvailable} disponíveis` : 'Sem estoque',
+    product.quantityAvailable > 0
+      ? `${product.quantityAvailable} no estoque demonstrativo`
+      : 'Sem estoque demonstrativo',
     product.quantityAvailable > 0 ? 'stock-ok' : 'stock-zero',
   ));
   card.append(meta);
+  card.append(textElement('small', 'Identidade do produto: real • Operação: simulada'));
 
-  if (product.prescriptionRequired) {
-    card.append(textElement('span', 'Receita exigida em operação real — somente simulação', 'tag'));
-  }
-
-  const reserve = textElement('button', 'Preparar reserva');
+  const reserve = textElement('button', 'Preparar reserva simulada');
   reserve.type = 'button';
   reserve.disabled = product.quantityAvailable < 1;
   reserve.addEventListener('click', () => {
@@ -147,7 +146,7 @@ async function loadCatalog() {
     return loadCatalog();
   }
 
-  document.querySelector('#catalog-count').textContent = `${result.total} produtos`;
+  document.querySelector('#catalog-count').textContent = `${result.total} produtos reais`;
   document.querySelector('#catalog-grid').replaceChildren(...result.items.map(productCard));
   document.querySelector('#page-status').textContent = `Página ${result.page} de ${state.totalPages}`;
   document.querySelector('#prev-page').disabled = state.page <= 1;
@@ -196,10 +195,12 @@ document.querySelector('#reservation-form').addEventListener('submit', async (ev
       headers: { 'Idempotency-Key': crypto.randomUUID() },
       body: JSON.stringify(payload),
     });
-    const total = `R$ ${(result.totalCents / 100).toFixed(2).replace('.', ',')}`;
+    const totalLine = result.totalCents === null || result.totalCents === undefined
+      ? 'Total: indisponível — preço comercial não cadastrado'
+      : `Total demonstrativo: R$ ${(result.totalCents / 100).toFixed(2).replace('.', ',')}`;
     showResult(
       '#reservation-result',
-      `Reserva ${result.id}\nStatus: ${result.status}\nValidade: ${result.expiresAt}\nTotal simulado: ${total}`,
+      `Reserva ${result.id}\nStatus: ${result.status}\nValidade: ${result.expiresAt}\n${totalLine}\nNenhuma venda ou cobrança foi realizada.`,
     );
   } catch (error) {
     showResult('#reservation-result', error.message, true);
@@ -226,10 +227,12 @@ function buildTable(headers, rows) {
 async function loadReports() {
   const report = await api('/api/reports');
   const cards = [
+    ['Produtos reais', report.realIdentityProducts],
+    ['Preços não cadastrados', report.productsWithoutPrice],
     ['Atendimentos', report.totalAttendances],
-    ['Reservas', report.reservations],
+    ['Reservas simuladas', report.reservations],
     ['Encaminhamentos', report.handoffs],
-    ['Sem estoque', report.outOfStockProducts],
+    ['Sem estoque demonstrativo', report.outOfStockProducts],
   ];
 
   document.querySelector('#report-cards').replaceChildren(...cards.map(([label, value]) => {

@@ -13,19 +13,50 @@ permissions:
 jobs:
   validate-browser-render:
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 12
     env:
       WEB_URL: https://predix-farmacia-virtual.onrender.com
       LEGACY_URL: https://qylqyhxpwffiripcpjej.supabase.co/functions/v1/predix-farmacia
       API_HEALTH: https://qylqyhxpwffiripcpjej.supabase.co/functions/v1/predix-api/api/health
+      API_PRODUCTS: https://qylqyhxpwffiripcpjej.supabase.co/functions/v1/predix-api/api/products?page=1&pageSize=1
     steps:
       - uses: actions/checkout@v4
+
+      - name: Wait for candidate frontend and bypass cache
+        shell: bash
+        run: |
+          set -euo pipefail
+          target="${WEB_URL}/?build=${GITHUB_SHA}&attempt=${GITHUB_RUN_ATTEMPT}"
+          ready=false
+          for attempt in $(seq 1 36); do
+            printf 'FRONTEND_POLL attempt=%s target=%s\n' "$attempt" "$target"
+            if curl --fail --silent --show-error --location \
+              --header 'Cache-Control: no-cache, no-store, must-revalidate' \
+              --header 'Pragma: no-cache' \
+              "$target" --output deployed.html; then
+              if grep --quiet 'CATÁLOGO COM IDENTIDADE REAL' deployed.html \
+                && grep --quiet 'produtos possuem identidade real' deployed.html; then
+                ready=true
+                break
+              fi
+            fi
+            sleep 5
+          done
+          test "$ready" = true
+          grep --quiet 'Predix Farmácia Virtual' deployed.html
+          ! grep --quiet 'CATÁLOGO SINTÉTICO' deployed.html
+          ! grep -Eqi 'Demo [0-9]{3}|Composto demonstrativo|Predix Labs Simulação|Farma Exemplo Fictícia' deployed.html
+          printf 'TARGET_URL=%s\n' "$target" >> "$GITHUB_ENV"
+          printf 'FRONTEND_CANDIDATE_READY=PASS\n'
 
       - name: Validate HTTP headers
         shell: bash
         run: |
           set -euo pipefail
-          headers="$(curl --fail --silent --show-error --location --head "$WEB_URL" | tr -d '\r')"
+          headers="$(curl --fail --silent --show-error --location --head \
+            --header 'Cache-Control: no-cache, no-store, must-revalidate' \
+            --header 'Pragma: no-cache' \
+            "$TARGET_URL" | tr -d '\r')"
           printf '%s\n' "$headers"
           content_type="$(printf '%s\n' "$headers" | awk -F': ' 'tolower($1)=="content-type" {print tolower($2)}' | tail -1)"
           test -n "$content_type"
@@ -49,18 +80,31 @@ jobs:
           test "$location" = "$WEB_URL"
           printf 'LEGACY_REDIRECT=PASS\n'
 
-      - name: Validate API health
+      - name: Validate API real catalog
         shell: bash
         run: |
           set -euo pipefail
           curl --fail --silent --show-error "$API_HEALTH" > health.json
+          curl --fail --silent --show-error "$API_PRODUCTS" > product.json
           python - <<'PY'
           import json
+          import re
           health = json.load(open('health.json', encoding='utf-8'))
+          catalog = json.load(open('product.json', encoding='utf-8'))
           assert health['status'] == 'ok', health
           assert health['products'] == 500, health
+          assert health['realProducts'] == 500, health
+          assert health['productsWithoutPrice'] == 500, health
+          assert health['catalogIdentity'] == 'real', health
           assert health['database'] == 'supabase-postgres', health
-          print(json.dumps(health, ensure_ascii=False, indent=2))
+          product = catalog['items'][0]
+          assert product['identityReal'] is True, product
+          assert product['operationsSimulated'] is True, product
+          assert product['anvisaRegistration'], product
+          assert product['priceCents'] is None, product
+          assert product['price'] == 'Consulte o estabelecimento', product
+          assert not re.search(r'Demo\s+\d{3}', product['name'], re.I), product
+          print(json.dumps({'health': health, 'sample': product}, ensure_ascii=False, indent=2))
           PY
 
       - name: Render with headless Chrome
@@ -74,35 +118,47 @@ jobs:
             --no-sandbox \
             --disable-gpu \
             --hide-scrollbars \
+            --disable-cache \
+            --disk-cache-size=1 \
             --window-size=390,844 \
-            --virtual-time-budget=12000 \
-            --screenshot=predix-mobile.png \
-            "$WEB_URL"
+            --virtual-time-budget=15000 \
+            --screenshot=predix-mobile-real-catalog.png \
+            "$TARGET_URL"
           "$browser" \
             --headless \
             --no-sandbox \
             --disable-gpu \
-            --virtual-time-budget=12000 \
+            --disable-cache \
+            --disk-cache-size=1 \
+            --virtual-time-budget=15000 \
             --dump-dom \
-            "$WEB_URL" > rendered.html
+            "$TARGET_URL" > rendered.html
           grep --quiet 'Predix Farmácia Virtual' rendered.html
           grep --quiet 'PostgreSQL conectado' rendered.html
-          grep --quiet '500 produtos' rendered.html
+          grep --quiet '500 produtos reais' rendered.html
+          grep --quiet 'CATÁLOGO COM IDENTIDADE REAL' rendered.html
+          grep --quiet 'Registro Anvisa' rendered.html
+          grep --quiet 'Consulte o estabelecimento' rendered.html
           grep --quiet 'FUNCIONÁRIO VIRTUAL' rendered.html
+          ! grep --quiet 'CATÁLOGO SINTÉTICO' rendered.html
+          ! grep -Eqi 'Demo [0-9]{3}|Composto demonstrativo|Predix Labs Simulação|Farma Exemplo Fictícia' rendered.html
           if grep --quiet '&lt;!doctype html&gt;' rendered.html; then
             echo 'RAW_HTML_VISIBLE=true'
             exit 1
           fi
-          test -s predix-mobile.png
-          printf 'BROWSER_RENDER=PASS\nMOBILE_SCREENSHOT=PASS\nRAW_HTML_VISIBLE=false\n'
+          test -s predix-mobile-real-catalog.png
+          printf 'BROWSER_RENDER=PASS\nMOBILE_SCREENSHOT=PASS\nREAL_CATALOG_VISIBLE=true\nRAW_HTML_VISIBLE=false\n'
 
       - name: Upload browser evidence
+        if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: predix-browser-evidence
+          name: predix-real-catalog-browser-evidence
           path: |
-            predix-mobile.png
+            predix-mobile-real-catalog.png
             rendered.html
+            deployed.html
             health.json
-          if-no-files-found: error
+            product.json
+          if-no-files-found: warn
           retention-days: 30

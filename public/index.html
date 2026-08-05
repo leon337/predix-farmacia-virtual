@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <meta name="description" content="Predix Farmácia Virtual — ambiente fictício para demonstração do Funcionário Virtual Predix.">
+  <meta name="description" content="Predix Farmácia Virtual — produtos para saúde com identidade regulatória real em um ambiente operacional demonstrativo.">
   <meta http-equiv="Content-Security-Policy" content="default-src 'self'; connect-src 'self' https://qylqyhxpwffiripcpjej.supabase.co; style-src 'self'; script-src 'self'; img-src 'self' data:; object-src 'none'; base-uri 'none'; frame-ancestors 'none'">
   <title>Predix Farmácia Virtual</title>
   <link rel="stylesheet" href="styles.css">
@@ -12,15 +12,15 @@
 <body>
   <header class="topbar">
     <div>
-      <p class="eyebrow">PREDIX AI • AMBIENTE FICTÍCIO</p>
+      <p class="eyebrow">PREDIX AI • CATÁLOGO REGULATÓRIO</p>
       <h1 id="company-name">Predix Farmácia Virtual</h1>
       <p id="company-status" class="status">Conectando ao PostgreSQL…</p>
     </div>
-    <span class="demo-badge">DEMONSTRAÇÃO</span>
+    <span class="demo-badge">OPERAÇÃO SIMULADA</span>
   </header>
 
   <div class="safety-banner" role="note">
-    Este sistema não vende medicamentos, não processa pagamentos ou receitas e não fornece orientação clínica.
+    Os produtos possuem identidade real e referência regulatória. Empresa, estoque, reservas, pagamentos e entregas são simulados. Este sistema não vende medicamentos e não fornece orientação clínica.
   </div>
 
   <nav class="tabs" aria-label="Áreas do sistema">
@@ -39,20 +39,20 @@
           <div id="chat-log" class="chat-log" aria-live="polite">
             <div class="message assistant">
               <strong>Funcionário Virtual</strong>
-              <p>Olá. Posso consultar produtos, preços, estoque, horários e preparar reservas simuladas.</p>
-              <small>Fonte: política do ambiente demonstrativo</small>
+              <p>Olá. Posso consultar produtos para saúde com identidade real, registro Anvisa, estoque demonstrativo, horários e reservas simuladas. Preços comerciais não estão cadastrados.</p>
+              <small>Fonte: catálogo regulatório e política do ambiente demonstrativo</small>
             </div>
           </div>
           <form id="chat-form" class="inline-form">
             <label class="sr-only" for="chat-input">Mensagem</label>
-            <input id="chat-input" maxlength="500" placeholder="Ex.: qual o preço do produto Demo 001?" required>
+            <input id="chat-input" maxlength="500" placeholder="Ex.: consulte um curativo transparente" required>
             <button type="submit">Enviar</button>
           </form>
         </article>
 
         <aside class="panel">
           <p class="eyebrow">SOBRE A EMPRESA</p>
-          <h2>Dados consultados em tempo real</h2>
+          <h2>Dados operacionais demonstrativos</h2>
           <div id="company-details" class="details"></div>
         </aside>
       </div>
@@ -62,14 +62,15 @@
       <article class="panel">
         <div class="section-heading">
           <div>
-            <p class="eyebrow">CATÁLOGO SINTÉTICO</p>
-            <h2>Produtos demonstrativos</h2>
+            <p class="eyebrow">CATÁLOGO COM IDENTIDADE REAL</p>
+            <h2>Produtos para saúde registrados</h2>
           </div>
           <span id="catalog-count" class="counter">Carregando…</span>
         </div>
+        <p class="status">Nomes, fabricantes e registros vêm da base regulatória. Estoques são demonstrativos e preços comerciais não estão cadastrados.</p>
         <form id="catalog-form" class="inline-form">
           <label class="sr-only" for="catalog-query">Buscar no catálogo</label>
-          <input id="catalog-query" placeholder="Nome, SKU, fabricante, categoria ou princípio ativo">
+          <input id="catalog-query" placeholder="Nome, SKU, fabricante, categoria ou registro Anvisa">
           <button type="submit">Buscar</button>
         </form>
         <div id="catalog-grid" class="catalog-grid" aria-live="polite"></div>
@@ -85,10 +86,10 @@
       <article class="panel form-panel">
         <p class="eyebrow">RESERVA SIMULADA</p>
         <h2>Preparar uma reserva</h2>
-        <p class="status">A reserva é fictícia, não gera venda, cobrança ou entrega.</p>
+        <p class="status">A reserva é fictícia, não gera venda, cobrança ou entrega. O produto selecionado possui identidade real.</p>
         <form id="reservation-form" class="stack-form">
           <label>Nome fictício
-            <input id="reservation-customer" maxlength="120" placeholder="Cliente Demo" required>
+            <input id="reservation-customer" maxlength="120" placeholder="Cliente demonstração" required>
           </label>
           <label>ID do produto
             <input id="reservation-product" type="number" min="1" required>
@@ -118,7 +119,7 @@
   </main>
 
   <footer>
-    Todos os produtos, pessoas, contatos, reservas e operações apresentados são fictícios.
+    Produtos: identidade regulatória real. Empresa, estoque, pessoas, reservas, pagamentos, entregas e operações: simulados.
   </footer>
 </body>
 </html>
