@@ -23,8 +23,20 @@ jobs:
           ref: feat/catalogo-500-produtos-com-imagens
           fetch-depth: 0
 
+      - name: Download official Open Beauty Facts dump
+        shell: bash
+        run: |
+          set -euo pipefail
+          curl --fail --location --retry 4 --retry-delay 5 --max-time 600 \
+            --user-agent 'PredixFarmaciaVirtual/1.0 (https://github.com/leon337/predix-farmacia-virtual)' \
+            'https://static.openbeautyfacts.org/data/en.openbeautyfacts.org.products.csv' \
+            --output /tmp/openbeautyfacts-products.csv
+          test "$(stat -c%s /tmp/openbeautyfacts-products.csv)" -gt 1000000
+          sha256sum /tmp/openbeautyfacts-products.csv
+          head -n 1 /tmp/openbeautyfacts-products.csv | cut -c1-500
+
       - name: Generate 500 distinct products with images
-        run: python3 scripts/build_retail_catalog_with_images.py
+        run: python3 scripts/build_retail_catalog_with_images.py --input /tmp/openbeautyfacts-products.csv
 
       - name: Validate product and image counts
         run: |
@@ -43,6 +55,9 @@ jobs:
           assert meta['productsWithImages'] == 500, meta
           assert meta['stockUnitsAreSeparate'] is True, meta
           assert meta['operationsAreSimulated'] is True, meta
+          assert meta['dumpUrl'] == 'https://static.openbeautyfacts.org/data/en.openbeautyfacts.org.products.csv'
+          assert meta['dumpBytes'] > 1000000
+          assert re.fullmatch(r'[0-9a-f]{64}', meta['dumpSha256'])
           assert len({p['id'] for p in products}) == 500
           assert len({p['sku'] for p in products}) == 500
           assert len({p['barcode'] for p in products}) == 500
@@ -50,7 +65,7 @@ jobs:
           assert all(re.fullmatch(r'\d{8,14}', p['barcode']) for p in products)
           assert all(p['name'] and p['manufacturer'] and p['category'] for p in products)
           assert all(p['imageUrl'].startswith('https://') for p in products)
-          assert all(p['imageSource'] in ('Open Beauty Facts', 'Open Products Facts') for p in products)
+          assert all(p['imageSource'] == 'Open Beauty Facts' for p in products)
           assert all(p['priceCents'] is None for p in products)
           assert all(p['identityReal'] is True for p in products)
           assert all(p['operationsSimulated'] is True for p in products)
@@ -58,6 +73,7 @@ jobs:
               'product_records': len(products),
               'distinct_barcodes': len({p['barcode'] for p in products}),
               'products_with_images': len([p for p in products if p['imageUrl']]),
+              'dump_sha256': meta['dumpSha256'],
           })
           PY
 
