@@ -40,14 +40,27 @@ replacementAuditEvents: 1
 - `predix-api` v3, digest `54801b70043a895976f7bce0ef1b6a446d8dc5635c23946995d8e4ffb28a3c66`: extrai número regulatório.
 - Reexecução do mesmo run, job `92369694281`: **PASS**.
 
-## Modo local
+## Modo local e API pública
 
 - CI `31024347215`, job `92368829741`: **PASS**.
-- Compile, hash, estrutura, 12 testes e smoke HTTP: PASS.
+- Candidato auditável `5132731789d9093cf41f0b1e4d6371eb349fab46`:
+  - CI `31024924108`, job `92370791028`: **PASS**;
+  - Remote Deploy Smoke `31024924303`, job `92370791795`: **PASS**.
+- Compile, hash, estrutura, testes e smoke HTTP: PASS.
+
+## Render e navegador
+
+- Deploy `dep-d9pm6mp5efls73a6l8sg`, SHA `5132731789d9093cf41f0b1e4d6371eb349fab46`: `live`.
+- Browser Render Smoke `31024993042`, job `92371024867`: **FAIL**.
+- Cabeçalho HTML, redirecionamento legado e API real: PASS.
+- Causa: o workflow iniciou enquanto o deploy ainda compilava. A resposta inicial veio do cache Cloudflare com `last-modified` do frontend anterior e `cf-cache-status: HIT`; o deploy candidato ficou `live` segundos depois.
+- O Chrome produziu uma captura, mas o DOM ainda não correspondia ao candidato e o artefato não foi aceito.
+- Correção: aguardar explicitamente o marcador do candidato, usar URL com o SHA para romper cache, enviar cabeçalhos `no-cache` e publicar artefatos mesmo em falha.
+- Nenhuma exigência de conteúdo foi removida.
 
 ## Pendente neste checkpoint
 
-- deploy Render do frontend candidato;
-- Browser Render Smoke e screenshot móvel;
+- repetir o deploy e Browser Render Smoke com o gate corrigido;
+- inspecionar screenshot e DOM;
 - PR, revisão, gate de Léo e merge;
 - checks e deploy do SHA final da main.
