@@ -8,7 +8,6 @@
   <title>Predix Farmácia Virtual</title>
   <link rel="stylesheet" href="styles.css">
   <script src="app.js" defer></script>
-  <script src="startup.js" defer></script>
 </head>
 <body>
   <header class="topbar">
@@ -25,14 +24,14 @@
   </div>
 
   <nav class="tabs" aria-label="Áreas do sistema">
-    <button class="tab active" data-view="chat" type="button">Atendimento</button>
-    <button class="tab" data-view="catalog" type="button">Catálogo</button>
+    <button class="tab" data-view="chat" type="button">Atendimento</button>
+    <button class="tab active" data-view="catalog" type="button">Catálogo</button>
     <button class="tab" data-view="reservation" type="button">Reserva</button>
     <button class="tab" data-view="reports" type="button">Relatórios</button>
   </nav>
 
   <main>
-    <section id="view-chat" class="view active">
+    <section id="view-chat" class="view" hidden>
       <div class="two-columns">
         <article class="panel">
           <p class="eyebrow">FUNCIONÁRIO VIRTUAL</p>
@@ -59,7 +58,7 @@
       </div>
     </section>
 
-    <section id="view-catalog" class="view" hidden>
+    <section id="view-catalog" class="view active">
       <article class="panel">
         <div class="section-heading">
           <div>
