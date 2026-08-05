@@ -82,7 +82,9 @@ jobs:
           ! grep -Eqi 'Demo [0-9]{3}|Composto demonstrativo|Predix Labs Simulação|Farma Exemplo Fictícia' data/retail_products_with_images.json
 
       - name: Commit generated catalog and evidence
+        shell: bash
         run: |
+          set -euo pipefail
           CHANGES="$(git status --porcelain -- data/retail_products_with_images.json audit/MCF-PFV-CATALOG-IMAGES-001/SOURCE-REPORT.md)"
           if [ -z "$CHANGES" ]; then
             echo 'Catalog unchanged'
@@ -93,4 +95,6 @@ jobs:
           git config user.email 'actions@users.noreply.github.com'
           git add data/retail_products_with_images.json audit/MCF-PFV-CATALOG-IMAGES-001/SOURCE-REPORT.md
           git commit -m 'data(manoel): gerar 500 produtos distintos com imagens [skip ci]'
+          git fetch origin feat/catalogo-500-produtos-com-imagens
+          git rebase origin/feat/catalogo-500-produtos-com-imagens
           git push origin HEAD:feat/catalogo-500-produtos-com-imagens
