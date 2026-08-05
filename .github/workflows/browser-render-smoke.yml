@@ -80,8 +80,12 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          curl --fail --silent --show-error "$API_HEALTH" > health.json
-          curl --fail --silent --show-error "$API_PRODUCTS" > product.json
+          curl --fail --silent --show-error \
+            --retry 5 --retry-delay 2 --retry-max-time 60 \
+            "$API_HEALTH" > health.json
+          curl --fail --silent --show-error \
+            --retry 5 --retry-delay 2 --retry-max-time 60 \
+            "$API_PRODUCTS" > product.json
           python - <<'PY'
           import json
           import re
