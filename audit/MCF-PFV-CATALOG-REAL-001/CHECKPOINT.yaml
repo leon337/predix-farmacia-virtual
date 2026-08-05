@@ -1,11 +1,11 @@
 mission_id: MCF-PFV-CATALOG-REAL-001
-status: CANDIDATE_DEPLOYED_BROWSER_RETRY_REQUIRED
+status: CANDIDATE_BROWSER_VALIDATED_AWAITING_PR
 risk_class: B
 human_authority: Leandro
 operational_authority: Leo
 coordinator: Mestre
 branch: feat/catalogo-real-anvisa
-candidate_code_sha: 31416bd75f8b98aefa731a6c30e706fe4e7893f2
+candidate_sha: 88f7cae97a41f492cf03aa3e626ef8ef32429f5e
 catalog:
   identities_real: 500
   products_without_price: 500
@@ -28,19 +28,25 @@ api:
   digest: 54801b70043a895976f7bce0ef1b6a446d8dc5635c23946995d8e4ffb28a3c66
 validation:
   catalog_generation_run: 31022791987
-  candidate_ci_run: 31024924108
-  candidate_remote_smoke_run: 31024924303
+  candidate_ci_run: 31025325789
+  candidate_remote_smoke_run: 31025325176
+  candidate_browser_run: 31025386429
+  candidate_browser_job: 92372367944
   candidate_ci: success
   candidate_remote_smoke: success
-  first_browser_run: 31024993042
-  first_browser_job: 92371024867
-  first_browser_result: failure_cached_previous_frontend
+  candidate_browser: success
+browser_evidence:
+  artifact_id: 8938372627
+  artifact_digest: sha256:4d8400aa262f7a2e0a9e0346dd30398fef0948d0b85f512983455cd75318f355
+  mobile_screenshot_sha256: 7faa0c5ead35c423598bcc302e478ec83222b46242d69caf5755bfc32700cd4e
+  rendered_dom_sha256: b4e7d84df6f7cb8e835bf6bc7f29dd588029e2bedc3045459e9a2abe57bb10dc
+  raw_html_visible: false
+  synthetic_markers_visible: false
 render:
   service_id: srv-d9pkpvu7bikc739i54u0
   tracked_branch: fix/frontend-render-real-browser
-  candidate_deploy_id: dep-d9pm6mp5efls73a6l8sg
-  candidate_deployed_sha: 5132731789d9093cf41f0b1e4d6371eb349fab46
-  candidate_deployed: true
+  candidate_deploy_id: dep-d9pm91egekts73dq8dqg
+  candidate_deployed_sha: 88f7cae97a41f492cf03aa3e626ef8ef32429f5e
   status: live
 gates:
   source: PASS
@@ -49,8 +55,8 @@ gates:
   api: PASS
   local_ci: PASS
   remote_smoke: PASS
-  browser: RETRY_REQUIRED_AFTER_CACHE_FIX
-  emily: PENDING_REPEATED_BROWSER_EVIDENCE
+  browser: PASS
+  emily: PASS_WITH_RECORDED_DEVIATIONS
   vinicius: PENDING_PR
   leo: PENDING_FINAL_GATE
-next_gate: DEPLOY_CACHE_FIXED_WORKFLOW_AND_REPEAT_BROWSER
+next_gate: OPEN_PR_AND_REVIEW
