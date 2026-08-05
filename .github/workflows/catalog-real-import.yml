@@ -1,0 +1,60 @@
+name: Catalogo Real Anvisa
+
+on:
+  push:
+    branches:
+      - feat/catalogo-real-anvisa
+    paths:
+      - scripts/build_real_catalog.py
+      - .github/workflows/catalog-real-import.yml
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build-real-catalog:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout branch
+        uses: actions/checkout@v4
+        with:
+          ref: feat/catalogo-real-anvisa
+          fetch-depth: 0
+
+      - name: Generate real catalog from Anvisa
+        run: python3 scripts/build_real_catalog.py
+
+      - name: Validate catalog structure
+        run: |
+          python3 - <<'PY'
+          import json
+          from pathlib import Path
+          path = Path('data/real_products.json')
+          payload = json.loads(path.read_text(encoding='utf-8'))
+          products = payload['products']
+          assert len(products) == 500, len(products)
+          assert len({p['sku'] for p in products}) == 500
+          assert len({(p['anvisaRegistration'], p['name'], p['manufacturer']) for p in products}) == 500
+          assert all(p['name'] and p['manufacturer'] and p['anvisaRegistration'] for p in products)
+          assert all(p['activeIngredient'] is None for p in products)
+          assert all(p['prescriptionRequired'] is False for p in products)
+          assert all(p['sourceUrl'].startswith('https://dados.anvisa.gov.br/') for p in products)
+          print({'products': len(products), 'categories': sorted({p['category'] for p in products})})
+          PY
+
+      - name: Prevent synthetic catalog names
+        run: |
+          ! grep -Eqi 'Demo [0-9]{3}|Composto demonstrativo|Predix Labs Simulação|Farma Exemplo Fictícia' data/real_products.json
+
+      - name: Commit generated evidence
+        run: |
+          if git diff --quiet -- data/real_products.json audit/MCF-PFV-CATALOG-REAL-001/SOURCE-REPORT.md; then
+            echo 'Catalog unchanged'
+            exit 0
+          fi
+          git config user.name 'predix-catalog-bot'
+          git config user.email 'actions@users.noreply.github.com'
+          git add data/real_products.json audit/MCF-PFV-CATALOG-REAL-001/SOURCE-REPORT.md
+          git commit -m 'data(manoel): gerar 500 produtos reais da Anvisa [skip ci]'
+          git push origin HEAD:feat/catalogo-real-anvisa
