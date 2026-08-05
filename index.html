@@ -5,7 +5,6 @@
   <meta name="viewport" content="width=device-width,initial-scale=1">
   <meta name="description" content="Farmácia virtual fictícia para demonstração do Funcionário Virtual Predix.">
   <title>Farmácia Horizonte Demo — Predix</title>
-  <link rel="stylesheet" href="/styles.css">
 </head>
 <body>
   <a class="skip-link" href="#main">Pular para o conteúdo</a>
@@ -152,6 +151,17 @@
     <strong>Predix Farmácia Virtual MVP</strong>
     <span>Todos os dados, produtos, contatos, reservas e operações são fictícios.</span>
   </footer>
-  <script src="/app.js" defer></script>
+  <script>
+    Promise.all([
+      fetch('/styles.css').then((response) => response.text()).then((css) => {
+        const style = document.createElement('style');
+        style.textContent = css;
+        document.head.append(style);
+      }),
+      fetch('/app.js').then((response) => response.text()).then((code) => Function(code)()),
+    ]).catch((error) => {
+      document.querySelector('#company-status').textContent = `Falha ao iniciar a interface: ${error.message}`;
+    });
+  </script>
 </body>
 </html>
