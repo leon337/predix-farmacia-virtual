@@ -2,7 +2,7 @@ name: Remote Deploy Smoke
 
 on:
   push:
-    branches: [feat/deploy-publico-auditavel, feat/catalogo-real-anvisa, main]
+    branches: [feat/deploy-publico-auditavel, feat/catalogo-real-anvisa, fix/frontend-render-real-browser, main]
   pull_request:
     branches: [main]
   workflow_dispatch:
@@ -13,12 +13,12 @@ permissions:
 jobs:
   validate-public-deployment:
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 12
     env:
       API_BASE: https://qylqyhxpwffiripcpjej.supabase.co/functions/v1/predix-api
       WEB_URL: https://predix-farmacia-virtual.onrender.com
     steps:
-      - name: Validate public frontend and API
+      - name: Validate public frontend, API and product image
         shell: bash
         run: |
           set -euo pipefail
@@ -26,97 +26,140 @@ jobs:
           import json
           import os
           import re
+          import time
           import uuid
           from urllib.request import Request, urlopen
 
           api = os.environ['API_BASE']
           web = os.environ['WEB_URL']
+          build_url = f"{web}/?view=catalog&build={os.environ.get('GITHUB_SHA','candidate')}"
 
-          def request(path, *, method='GET', body=None, headers=None):
+          def api_request(path, *, method='GET', body=None, headers=None):
               payload = None if body is None else json.dumps(body).encode('utf-8')
               req = Request(api + path, data=payload, method=method)
               req.add_header('Content-Type', 'application/json')
               for key, value in (headers or {}).items():
                   req.add_header(key, value)
-              with urlopen(req, timeout=30) as response:
+              with urlopen(req, timeout=40) as response:
                   return response.status, json.load(response)
 
-          with urlopen(web, timeout=30) as response:
-              html = response.read().decode('utf-8')
-              assert response.status == 200
-              assert 'Predix Farmácia Virtual' in html
+          html = ''
+          for attempt in range(36):
+              req = Request(build_url, headers={'Cache-Control': 'no-cache, no-store', 'Pragma': 'no-cache'})
+              try:
+                  with urlopen(req, timeout=30) as response:
+                      html = response.read().decode('utf-8')
+                      if response.status == 200 and 'CATÁLOGO COM IDENTIDADE E IMAGEM REAL' in html:
+                          break
+              except Exception:
+                  pass
+              time.sleep(5)
+          else:
+              raise AssertionError('frontend candidate was not published in time')
 
-          status, health = request('/api/health')
-          assert status == 200
-          assert health['status'] == 'ok'
-          assert health['products'] == 500
-          assert health['realProducts'] == 500
-          assert health['productsWithoutPrice'] == 500
-          assert health['catalogIdentity'] == 'real'
-          assert health['operations'] == 'simulated'
-          assert health['prices'] == 'not-provided'
-          assert health['database'] == 'supabase-postgres'
+          assert 'Predix Farmácia Virtual' in html
+          assert 'produtos distintos' in html
+          assert 'unidades simuladas em estoque' in html
+          assert 'images.openbeautyfacts.org' in html
 
-          status, company = request('/api/company')
+          status, health = api_request('/api/health')
+          assert status == 200, status
+          assert health['status'] == 'ok', health
+          assert health['productRecords'] == 500, health
+          assert health['distinctProducts'] == 500, health
+          assert health['realProducts'] == 500, health
+          assert health['productsWithImages'] == 500, health
+          assert health['productsWithBarcode'] == 500, health
+          assert health['productsWithoutPrice'] == 500, health
+          assert health['inventoryRows'] == 500, health
+          assert health['stockUnitsSimulated'] > 500, health
+          assert health['stockUnitsSimulated'] != health['distinctProducts'], health
+          assert health['catalogIdentity'] == 'real-with-images', health
+          assert health['productCountMeaning'] == 'distinct-product-records', health
+          assert health['stockCountMeaning'] == 'simulated-units', health
+          assert health['database'] == 'supabase-postgres', health
+          assert health['version'] == '1.2.0', health
+
+          status, company = api_request('/api/company')
           assert status == 200
           assert company['operationsSimulated'] is True
           assert company['identityReal'] is False
 
-          status, products = request('/api/products?page=1&pageSize=24')
+          status, products = api_request('/api/products?page=1&pageSize=24')
           assert status == 200
-          assert products['total'] == 500
-          assert products['identityReal'] is True
+          assert products['total'] == 500, products
+          assert products['distinctProducts'] == 500, products
+          assert products['firstRecord'] == 1, products
+          assert products['lastRecord'] == 24, products
           assert products['operationsSimulated'] is True
           assert products['pricesProvided'] is False
           assert len(products['items']) == 24
-          assert not any(re.search(r'Demo\s+\d{3}', item['name'], re.I) for item in products['items'])
+
           product = next(item for item in products['items'] if item['quantityAvailable'] > 0)
+          assert re.fullmatch(r'\d{8,14}', product['barcode']), product
           assert product['identityReal'] is True
           assert product['operationsSimulated'] is True
-          assert product['anvisaRegistration']
-          assert product['riskClass'] in ('I', 'II', '1', '2')
+          assert product['stockIsSimulated'] is True
+          assert product['identitySource'] == 'gtin-and-open-beauty-facts'
+          assert product['imageUrl'].startswith('https://images.openbeautyfacts.org/'), product
+          assert product['imageSource'] == 'Open Beauty Facts'
           assert product['priceCents'] is None
           assert product['priceAvailable'] is False
           assert product['price'] == 'Consulte o estabelecimento'
-          assert product['activeIngredient'] is None
+          assert product['anvisaRegistration'] is None
 
-          status, chat = request('/api/chat', method='POST', body={
-              'message': f"qual o preço do registro {product['anvisaRegistration']}",
-              'sessionId': 'github-remote-catalog-real-smoke'
+          image_request = Request(product['imageUrl'], headers={
+              'User-Agent': 'PredixFarmaciaVirtualSmoke/1.0',
+              'Range': 'bytes=0-4095',
+              'Accept': 'image/*',
+          })
+          with urlopen(image_request, timeout=40) as image_response:
+              image_bytes = image_response.read(4096)
+              assert image_response.status in (200, 206)
+              assert image_response.headers.get_content_type().startswith('image/')
+              assert len(image_bytes) > 1000
+
+          status, chat = api_request('/api/chat', method='POST', body={
+              'message': f"qual o preço do código de barras {product['barcode']}",
+              'sessionId': 'github-remote-catalog-images-smoke'
           })
           assert status == 200
-          assert chat['tool'] == 'search_products'
+          assert chat['tool'] == 'search_products', chat
           assert chat['identityReal'] is True
           assert chat['operationsSimulated'] is True
           assert 'preço comercial não está cadastrado' in chat['message']
-          assert any(str(product['anvisaRegistration']) in source for source in chat['sources'])
+          assert any(str(product['barcode']) in source for source in chat['sources'])
 
-          status, reservation = request('/api/reservations', method='POST', body={
+          status, reservation = api_request('/api/reservations', method='POST', body={
               'customerName': 'Cliente Smoke Demonstração',
               'items': [{'productId': product['id'], 'quantity': 1}]
-          }, headers={'Idempotency-Key': 'catalog-real-smoke-' + str(uuid.uuid4())})
+          }, headers={'Idempotency-Key': 'catalog-images-smoke-' + str(uuid.uuid4())})
           assert status == 201
           assert reservation['status'] == 'ACTIVE'
           assert reservation['totalCents'] is None
 
-          status, cancelled = request(f"/api/reservations/{reservation['id']}/cancel", method='POST', body={})
+          status, cancelled = api_request(f"/api/reservations/{reservation['id']}/cancel", method='POST', body={})
           assert status == 200
           assert cancelled['status'] == 'CANCELLED'
 
-          status, reports = request('/api/reports')
+          status, reports = api_request('/api/reports')
           assert status == 200
-          assert reports['realIdentityProducts'] == 500
-          assert reports['productsWithoutPrice'] == 500
-          assert reports['totalAttendances'] >= 1
+          assert reports['realIdentityProducts'] == 500, reports
+          assert reports['distinctProducts'] == 500, reports
+          assert reports['productsWithImages'] == 500, reports
+          assert reports['productsWithBarcode'] == 500, reports
+          assert reports['stockUnitsSimulated'] > 500, reports
+          assert reports['productsWithoutPrice'] == 500, reports
           assert reports['operationsSimulated'] is True
 
           print(json.dumps({
               'frontend': 'PASS',
               'health': health,
               'company': company['name'],
-              'catalog_total': products['total'],
-              'sample_registration': product['anvisaRegistration'],
-              'price': product['price'],
+              'product_records': products['total'],
+              'sample_barcode': product['barcode'],
+              'sample_image': product['imageUrl'],
+              'image_download': 'PASS',
               'chat': 'PASS',
               'reservation_created_and_cancelled': reservation['id'],
               'reports': 'PASS'
