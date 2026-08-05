@@ -1,0 +1,95 @@
+name: Remote Deploy Smoke
+
+on:
+  push:
+    branches: [feat/deploy-publico-auditavel, main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  validate-public-deployment:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      API_BASE: https://qylqyhxpwffiripcpjej.supabase.co/functions/v1/predix-api
+      WEB_URL: https://qylqyhxpwffiripcpjej.supabase.co/functions/v1/predix-farmacia
+    steps:
+      - name: Validate public frontend and API
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import json
+          import os
+          import uuid
+          from urllib.request import Request, urlopen
+
+          api = os.environ['API_BASE']
+          web = os.environ['WEB_URL']
+
+          def request(path, *, method='GET', body=None, headers=None):
+              payload = None if body is None else json.dumps(body).encode('utf-8')
+              req = Request(api + path, data=payload, method=method)
+              req.add_header('Content-Type', 'application/json')
+              for key, value in (headers or {}).items():
+                  req.add_header(key, value)
+              with urlopen(req, timeout=30) as response:
+                  return response.status, json.load(response)
+
+          with urlopen(web, timeout=30) as response:
+              html = response.read().decode('utf-8')
+              assert response.status == 200
+              assert 'Predix Farmácia Virtual' in html
+              assert 'AMBIENTE FICTÍCIO' in html
+
+          status, health = request('/api/health')
+          assert status == 200
+          assert health['status'] == 'ok'
+          assert health['products'] == 500
+          assert health['database'] == 'supabase-postgres'
+
+          status, company = request('/api/company')
+          assert status == 200
+          assert company['isDemo'] is True
+
+          status, products = request('/api/products?page=1&pageSize=2')
+          assert status == 200
+          assert products['total'] == 500
+          assert len(products['items']) == 2
+          product = products['items'][0]
+
+          status, chat = request('/api/chat', method='POST', body={
+              'message': f"qual o preço do {product['name']}",
+              'sessionId': 'github-remote-smoke'
+          })
+          assert status == 200
+          assert chat['tool'] == 'search_products'
+          assert chat['sources']
+
+          status, reservation = request('/api/reservations', method='POST', body={
+              'customerName': 'Cliente Smoke Demo',
+              'items': [{'productId': product['id'], 'quantity': 1}]
+          }, headers={'Idempotency-Key': 'smoke-' + str(uuid.uuid4())})
+          assert status == 201
+          assert reservation['status'] == 'ACTIVE'
+          assert reservation['isDemo'] is True
+
+          status, reports = request('/api/reports')
+          assert status == 200
+          assert reports['totalAttendances'] >= 1
+          assert reports['reservations'] >= 1
+
+          print(json.dumps({
+              'frontend': 'PASS',
+              'health': health,
+              'company': company['name'],
+              'catalog_total': products['total'],
+              'chat': 'PASS',
+              'reservation': reservation['id'],
+              'reports': 'PASS'
+          }, ensure_ascii=False, indent=2))
+          PY
