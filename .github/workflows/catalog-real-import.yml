@@ -63,10 +63,12 @@ jobs:
 
       - name: Commit generated evidence
         run: |
-          if git diff --quiet -- data/real_products.json audit/MCF-PFV-CATALOG-REAL-001/SOURCE-REPORT.md; then
+          CHANGES="$(git status --porcelain -- data/real_products.json audit/MCF-PFV-CATALOG-REAL-001/SOURCE-REPORT.md)"
+          if [ -z "$CHANGES" ]; then
             echo 'Catalog unchanged'
             exit 0
           fi
+          printf '%s\n' "$CHANGES"
           git config user.name 'predix-catalog-bot'
           git config user.email 'actions@users.noreply.github.com'
           git add data/real_products.json audit/MCF-PFV-CATALOG-REAL-001/SOURCE-REPORT.md
