@@ -13,7 +13,7 @@ permissions:
 jobs:
   validate-browser-render:
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 12
     env:
       WEB_URL: https://predix-farmacia-virtual.onrender.com
       LEGACY_URL: https://qylqyhxpwffiripcpjej.supabase.co/functions/v1/predix-farmacia
@@ -22,11 +22,41 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - name: Wait for candidate frontend and bypass cache
+        shell: bash
+        run: |
+          set -euo pipefail
+          target="${WEB_URL}/?build=${GITHUB_SHA}&attempt=${GITHUB_RUN_ATTEMPT}"
+          ready=false
+          for attempt in $(seq 1 36); do
+            printf 'FRONTEND_POLL attempt=%s target=%s\n' "$attempt" "$target"
+            if curl --fail --silent --show-error --location \
+              --header 'Cache-Control: no-cache, no-store, must-revalidate' \
+              --header 'Pragma: no-cache' \
+              "$target" --output deployed.html; then
+              if grep --quiet 'CATÁLOGO COM IDENTIDADE REAL' deployed.html \
+                && grep --quiet 'produtos possuem identidade real' deployed.html; then
+                ready=true
+                break
+              fi
+            fi
+            sleep 5
+          done
+          test "$ready" = true
+          grep --quiet 'Predix Farmácia Virtual' deployed.html
+          ! grep --quiet 'CATÁLOGO SINTÉTICO' deployed.html
+          ! grep -Eqi 'Demo [0-9]{3}|Composto demonstrativo|Predix Labs Simulação|Farma Exemplo Fictícia' deployed.html
+          printf 'TARGET_URL=%s\n' "$target" >> "$GITHUB_ENV"
+          printf 'FRONTEND_CANDIDATE_READY=PASS\n'
+
       - name: Validate HTTP headers
         shell: bash
         run: |
           set -euo pipefail
-          headers="$(curl --fail --silent --show-error --location --head "$WEB_URL" | tr -d '\r')"
+          headers="$(curl --fail --silent --show-error --location --head \
+            --header 'Cache-Control: no-cache, no-store, must-revalidate' \
+            --header 'Pragma: no-cache' \
+            "$TARGET_URL" | tr -d '\r')"
           printf '%s\n' "$headers"
           content_type="$(printf '%s\n' "$headers" | awk -F': ' 'tolower($1)=="content-type" {print tolower($2)}' | tail -1)"
           test -n "$content_type"
@@ -88,17 +118,21 @@ jobs:
             --no-sandbox \
             --disable-gpu \
             --hide-scrollbars \
+            --disable-cache \
+            --disk-cache-size=1 \
             --window-size=390,844 \
             --virtual-time-budget=15000 \
             --screenshot=predix-mobile-real-catalog.png \
-            "$WEB_URL"
+            "$TARGET_URL"
           "$browser" \
             --headless \
             --no-sandbox \
             --disable-gpu \
+            --disable-cache \
+            --disk-cache-size=1 \
             --virtual-time-budget=15000 \
             --dump-dom \
-            "$WEB_URL" > rendered.html
+            "$TARGET_URL" > rendered.html
           grep --quiet 'Predix Farmácia Virtual' rendered.html
           grep --quiet 'PostgreSQL conectado' rendered.html
           grep --quiet '500 produtos reais' rendered.html
@@ -116,13 +150,15 @@ jobs:
           printf 'BROWSER_RENDER=PASS\nMOBILE_SCREENSHOT=PASS\nREAL_CATALOG_VISIBLE=true\nRAW_HTML_VISIBLE=false\n'
 
       - name: Upload browser evidence
+        if: always()
         uses: actions/upload-artifact@v4
         with:
           name: predix-real-catalog-browser-evidence
           path: |
             predix-mobile-real-catalog.png
             rendered.html
+            deployed.html
             health.json
             product.json
-          if-no-files-found: error
+          if-no-files-found: warn
           retention-days: 30
