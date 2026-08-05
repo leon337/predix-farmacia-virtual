@@ -1,0 +1,157 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="description" content="Farmácia virtual fictícia para demonstração do Funcionário Virtual Predix.">
+  <title>Farmácia Horizonte Demo — Predix</title>
+  <link rel="stylesheet" href="/styles.css">
+</head>
+<body>
+  <a class="skip-link" href="#main">Pular para o conteúdo</a>
+  <header class="topbar">
+    <div>
+      <span class="eyebrow">PREDIX • AMBIENTE FICTÍCIO</span>
+      <h1 id="company-name">Farmácia Horizonte Demo</h1>
+      <p id="company-status">Carregando dados demonstrativos…</p>
+    </div>
+    <span class="demo-badge" aria-label="Ambiente apenas para demonstração">DEMO</span>
+  </header>
+
+  <nav class="tabs" aria-label="Seções da demonstração">
+    <button class="tab active" data-view="chat" aria-controls="view-chat">Atendimento</button>
+    <button class="tab" data-view="catalog" aria-controls="view-catalog">Catálogo</button>
+    <button class="tab" data-view="inventory" aria-controls="view-inventory">Estoque</button>
+    <button class="tab" data-view="reports" aria-controls="view-reports">Relatórios</button>
+  </nav>
+
+  <main id="main">
+    <section id="view-chat" class="view active" aria-labelledby="chat-title">
+      <div class="two-columns">
+        <article class="panel chat-panel">
+          <div class="panel-heading">
+            <div>
+              <span class="eyebrow">FUNCIONÁRIO VIRTUAL</span>
+              <h2 id="chat-title">Balcão digital</h2>
+            </div>
+            <span class="online-dot">Operação simulada</span>
+          </div>
+          <div id="chat-log" class="chat-log" aria-live="polite" aria-label="Histórico da conversa">
+            <div class="message assistant">
+              <strong>Funcionário Virtual</strong>
+              <p>Olá. Posso consultar produtos, preços, estoque, horários e criar reservas simuladas. Não forneço orientação clínica.</p>
+              <small>Fonte: política do ambiente demonstrativo</small>
+            </div>
+          </div>
+          <form id="chat-form" class="chat-form">
+            <label for="chat-input">Mensagem</label>
+            <div class="input-row">
+              <input id="chat-input" name="message" autocomplete="off" maxlength="500" placeholder="Ex.: preço do Aurilex Demo 001" required>
+              <button type="submit">Enviar</button>
+            </div>
+          </form>
+        </article>
+
+        <aside class="panel info-panel" aria-labelledby="about-title">
+          <span class="eyebrow">SOBRE A DEMONSTRAÇÃO</span>
+          <h2 id="about-title">Funcionário, não chatbot</h2>
+          <p>O atendente consulta banco, treinamento e ferramentas antes de responder. Estoque e preços não ficam fixos no texto do agente.</p>
+          <div class="rule-card">
+            <strong>Regra central</strong>
+            <p>Sem fonte confiável, não responde como fato e encaminha para atendimento humano fictício.</p>
+          </div>
+          <div id="company-details" class="company-details"></div>
+        </aside>
+      </div>
+    </section>
+
+    <section id="view-catalog" class="view" aria-labelledby="catalog-title" hidden>
+      <article class="panel">
+        <div class="panel-heading">
+          <div>
+            <span class="eyebrow">CATÁLOGO SINTÉTICO</span>
+            <h2 id="catalog-title">Produtos demonstrativos</h2>
+          </div>
+          <span id="catalog-count" class="counter">0 produtos</span>
+        </div>
+        <form id="catalog-form" class="filters">
+          <label>Buscar
+            <input id="catalog-query" type="search" placeholder="Nome, SKU, fabricante, categoria ou princípio ativo">
+          </label>
+          <button type="submit">Aplicar filtro</button>
+        </form>
+        <div id="catalog-grid" class="catalog-grid" aria-live="polite"></div>
+        <div class="pagination">
+          <button id="prev-page" type="button">Anterior</button>
+          <span id="page-status">Página 1</span>
+          <button id="next-page" type="button">Próxima</button>
+        </div>
+      </article>
+    </section>
+
+    <section id="view-inventory" class="view" aria-labelledby="inventory-title" hidden>
+      <div class="two-columns">
+        <article class="panel">
+          <span class="eyebrow">RESERVA SIMULADA</span>
+          <h2 id="inventory-title">Criar reserva</h2>
+          <form id="reservation-form" class="stack-form">
+            <label>Nome fictício do cliente
+              <input id="reservation-customer" maxlength="80" required placeholder="Cliente Demo">
+            </label>
+            <label>ID do produto
+              <input id="reservation-product" type="number" min="1" required placeholder="1">
+            </label>
+            <label>Quantidade
+              <input id="reservation-quantity" type="number" min="1" max="100" value="1" required>
+            </label>
+            <button type="submit">Reservar no ambiente demo</button>
+          </form>
+          <div id="reservation-result" class="result-box" aria-live="polite"></div>
+        </article>
+
+        <article class="panel">
+          <span class="eyebrow">CONTROLE ADMINISTRATIVO</span>
+          <h2>Atualizar estoque</h2>
+          <p>Operação protegida por chave configurada no servidor.</p>
+          <form id="stock-form" class="stack-form">
+            <label>Chave administrativa
+              <input id="admin-key" type="password" autocomplete="off">
+            </label>
+            <label>ID do produto
+              <input id="stock-product" type="number" min="1" required>
+            </label>
+            <label>Quantidade total
+              <input id="stock-quantity" type="number" min="0" required>
+            </label>
+            <button type="submit">Atualizar estoque</button>
+          </form>
+          <div id="stock-result" class="result-box" aria-live="polite"></div>
+        </article>
+      </div>
+    </section>
+
+    <section id="view-reports" class="view" aria-labelledby="reports-title" hidden>
+      <article class="panel">
+        <div class="panel-heading">
+          <div>
+            <span class="eyebrow">INDICADORES OPERACIONAIS</span>
+            <h2 id="reports-title">Relatórios básicos</h2>
+          </div>
+          <button id="refresh-reports" type="button">Atualizar</button>
+        </div>
+        <div id="report-cards" class="report-cards"></div>
+        <div class="report-table">
+          <h3>Produtos mais consultados</h3>
+          <div id="top-products"></div>
+        </div>
+      </article>
+    </section>
+  </main>
+
+  <footer>
+    <strong>Predix Farmácia Virtual MVP</strong>
+    <span>Todos os dados, produtos, contatos, reservas e operações são fictícios.</span>
+  </footer>
+  <script src="/app.js" defer></script>
+</body>
+</html>
