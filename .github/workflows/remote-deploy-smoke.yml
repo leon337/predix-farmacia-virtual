@@ -28,6 +28,7 @@ jobs:
           import re
           import time
           import uuid
+          from urllib.error import HTTPError, URLError
           from urllib.request import Request, urlopen
 
           api = os.environ['API_BASE']
@@ -36,12 +37,30 @@ jobs:
 
           def api_request(path, *, method='GET', body=None, headers=None):
               payload = None if body is None else json.dumps(body).encode('utf-8')
-              req = Request(api + path, data=payload, method=method)
-              req.add_header('Content-Type', 'application/json')
-              for key, value in (headers or {}).items():
-                  req.add_header(key, value)
-              with urlopen(req, timeout=40) as response:
-                  return response.status, json.load(response)
+              max_attempts = 6 if method == 'GET' else 1
+              for attempt in range(1, max_attempts + 1):
+                  req = Request(api + path, data=payload, method=method)
+                  req.add_header('Content-Type', 'application/json')
+                  req.add_header('Cache-Control', 'no-cache, no-store')
+                  for key, value in (headers or {}).items():
+                      req.add_header(key, value)
+                  try:
+                      with urlopen(req, timeout=40) as response:
+                          return response.status, json.load(response)
+                  except HTTPError as error:
+                      error_body = error.read().decode('utf-8', errors='replace')[:500]
+                      print(f"API_ATTEMPT path={path} method={method} attempt={attempt} status={error.code} body={error_body}")
+                      if method == 'GET' and 500 <= error.code < 600 and attempt < max_attempts:
+                          time.sleep(2 * attempt)
+                          continue
+                      raise
+                  except URLError as error:
+                      print(f"API_ATTEMPT path={path} method={method} attempt={attempt} network_error={error}")
+                      if method == 'GET' and attempt < max_attempts:
+                          time.sleep(2 * attempt)
+                          continue
+                      raise
+              raise AssertionError(f"API did not stabilize: {path}")
 
           html = ''
           for attempt in range(36):
@@ -51,8 +70,8 @@ jobs:
                       html = response.read().decode('utf-8')
                       if response.status == 200 and 'CATÁLOGO COM IDENTIDADE E IMAGEM REAL' in html:
                           break
-              except Exception:
-                  pass
+              except Exception as error:
+                  print(f"FRONTEND_ATTEMPT attempt={attempt + 1} error={error}")
               time.sleep(5)
           else:
               raise AssertionError('frontend candidate was not published in time')
