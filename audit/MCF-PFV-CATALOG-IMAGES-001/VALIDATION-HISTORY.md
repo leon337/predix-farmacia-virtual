@@ -7,9 +7,9 @@
 - Primeira geração: **REJEITADA** por registro contaminado `pão artesanal milho`, fabricante `50g`.
 - Segunda geração: **REJEITADA** após auditoria ampliada encontrar `:rest Rooibos`, Advil, antácidos e papel higiênico.
 - Workflow de persistência: **FAIL** por push não fast-forward após commits paralelos; corrigido com fetch + rebase.
-- Geração estrita: exigiu sinal positivo de higiene/beleza/cuidados pessoais e bloqueio de alimentos, medicamentos, bebidas e itens domésticos incompatíveis.
-- Auditor independente encontrou divergências reais de pluralização e Unicode; política foi alinhada sem criar exceções individuais.
-- Campo `scopeEvidence` passou a ser persistido em cada ficha.
+- Geração estrita: exigiu sinal positivo de higiene, beleza ou cuidados pessoais e bloqueio de alimentos, medicamentos, bebidas e itens domésticos incompatíveis.
+- Auditor independente encontrou divergências de pluralização e normalização Unicode; a política foi alinhada sem exceções individuais.
+- O campo `scopeEvidence` passou a ser persistido em cada ficha.
 
 ## Artefato final
 
@@ -37,6 +37,8 @@ simulated_stock_units: 27106
 negative_availability: 0
 ```
 
+Portanto, `500` representa registros distintos de produto. A quantidade de estoque é uma métrica separada: `27.106` unidades simuladas distribuídas entre os 500 produtos.
+
 ## API
 
 - `predix-api` versão de função: `4`.
@@ -48,24 +50,94 @@ negative_availability: 0
 
 ## Frontend e navegador
 
-- Render build real inspecionado: publica somente `index.html`, `styles.css` e `app.js`.
+- O build real do Render foi inspecionado: publica somente `index.html`, `styles.css` e `app.js`.
 - `startup.js` foi removido por não participar da produção.
-- Cache antigo de `app.js` detectado em screenshot; corrigido com URLs versionadas.
-- Primeiro browser gate após imagens: **FAIL** por falso positivo `Demo 500`, causado pelo nome da empresa seguido do contador.
-- Regra corrigida para inspecionar `Demo NNN` somente nos títulos dos cards.
+- Cache antigo de `app.js` foi detectado em screenshot e corrigido com URLs versionadas.
+- Um browser gate confundiu o nome `Farmácia Horizonte Demo` seguido do contador `500` com produto `Demo 500`; a regra foi restringida aos títulos dos cards.
+- A captura final mostra a aba Catálogo, três contadores separados, cards com fotografias e paginação.
 
-## Candidato final
+## PR funcional #7
+
+Head final:
+
+```text
+cb8b0461b693cb15fc83ec069121c587fa04303d
+```
+
+Checks:
 
 ```yaml
-candidate_sha: 4436983a9054180fca7dd46e2a1534f1aab13e67
-ci_run: 31054834148
-ci_job: 92469963968
-ci: SUCCESS
-remote_smoke_run: 31054866901
-remote_smoke: SUCCESS
-browser_run: 31054866941
-browser_job: 92470061636
-browser: SUCCESS
-render_deploy: dep-d9ps19bncjis73f6iorg
-render_status: live
+CI: 31055398649 — SUCCESS
+Remote_Deploy_Smoke: 31055398764 — SUCCESS
+Browser_Render_Smoke: 31055398811 — SUCCESS
 ```
+
+Merge por squash:
+
+```text
+9ed6694ea599b276a6406464767ad9a7bf997bd9
+```
+
+## Bloqueio pós-merge funcional
+
+Na primeira validação da `main` após o PR #7:
+
+```yaml
+CI: 31055528185 — SUCCESS
+Remote_Deploy_Smoke: 31055530374 — SUCCESS
+Browser_Render_Smoke: 31055528629 — FAIL
+failed_job: 92472083071
+```
+
+Causa: a etapa do navegador ainda usava `curl` direto para `API_HEALTH` e `API_PRODUCTS`; uma leitura recebeu HTTP 500 transitório antes do Chrome. O produto, o catálogo e as imagens não foram considerados aprovados com esse resultado.
+
+## PR corretivo #8
+
+A correção adicionou repetição limitada somente às leituras GET, mantendo todas as asserções funcionais e visuais.
+
+Head:
+
+```text
+3156bdef609bae749dae68e1bb4051f2157035bc
+```
+
+Checks:
+
+```yaml
+CI: 31055727024 — SUCCESS
+Remote_Deploy_Smoke: 31055727021 — SUCCESS
+Browser_Render_Smoke: 31055727017 — SUCCESS
+Browser_job: 92472683269
+```
+
+Merge por squash:
+
+```text
+244eb25e26718ea533ea279fdd7d438a078fad6e
+```
+
+## Estado final da `main`
+
+```yaml
+final_main_sha: 244eb25e26718ea533ea279fdd7d438a078fad6e
+CI: 31055829595 — SUCCESS
+Remote_Deploy_Smoke: 31055829741 — SUCCESS
+Browser_Render_Smoke: 31055828143 — SUCCESS
+Render_deploy: dep-d9ps9449v7es73e7ahj0
+Render_status: live
+```
+
+## Evidência final do navegador
+
+```yaml
+artifact_id: 8950191480
+artifact_digest: sha256:d2fd52038f5419fa455cc142fdd458997c13834af1c1b17937eb0603bb495fae
+screenshot_sha256: 4442f4e4a178a5564ab27f1127ad3bb979930bcad0e7abf9451e7b2e288b87fa
+rendered_dom_sha256: 6f355a5bc4523bf69605562a4a29f66fc9585edb5315a1a4a18744d8e76468d9
+sample_product_image_sha256: bb26489133641b49fc0144d216332d666414bbf655c05db48d0dcdb5f109d926
+cards_first_page: 24
+external_images_first_page: 24
+fallback_errors: 0
+```
+
+Todos os bloqueios, cargas rejeitadas, falsos positivos e correções permanecem registrados.
