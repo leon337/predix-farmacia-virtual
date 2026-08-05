@@ -36,7 +36,7 @@ jobs:
               "$target" --output deployed.html; then
               if grep --quiet 'CATÁLOGO COM IDENTIDADE E IMAGEM REAL' deployed.html \
                 && grep --quiet 'unidades simuladas em estoque' deployed.html \
-                && grep --quiet 'startup.js' deployed.html; then
+                && grep --quiet 'images.openbeautyfacts.org' deployed.html; then
                 ready=true
                 break
               fi
@@ -45,7 +45,7 @@ jobs:
           done
           test "$ready" = true
           grep --quiet 'Predix Farmácia Virtual' deployed.html
-          grep --quiet 'images.openbeautyfacts.org' deployed.html
+          ! grep --quiet 'startup.js' deployed.html
           ! grep --quiet 'CATÁLOGO SINTÉTICO' deployed.html
           printf 'TARGET_URL=%s\n' "$target" >> "$GITHUB_ENV"
           printf 'FRONTEND_CANDIDATE_READY=PASS\n'
