@@ -1,7 +1,12 @@
 'use strict';
 
 const API_BASE = 'https://qylqyhxpwffiripcpjej.supabase.co/functions/v1/predix-api';
-const state = { page: 1, totalPages: 1, sessionId: crypto.randomUUID() };
+const state = {
+  page: 1,
+  totalPages: 1,
+  sessionId: crypto.randomUUID(),
+  health: null,
+};
 
 async function api(path, options = {}) {
   const response = await fetch(`${API_BASE}${path}`, {
@@ -23,6 +28,12 @@ function textElement(tag, text, className = '') {
   return element;
 }
 
+function placeholderImage(name) {
+  const safeName = String(name || 'Produto').slice(0, 36).replace(/[<>&"']/g, '');
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="640" height="480" viewBox="0 0 640 480"><rect width="640" height="480" fill="#eef4ef"/><path d="M230 150h180v180H230z" fill="#d4e7da"/><path d="M265 190h110v100H265z" fill="#fff" stroke="#176b43" stroke-width="12"/><path d="M320 210v60M290 240h60" stroke="#176b43" stroke-width="15" stroke-linecap="round"/><text x="320" y="380" text-anchor="middle" font-family="Arial,sans-serif" font-size="24" fill="#0f5132">${safeName}</text></svg>`;
+  return `data:image/svg+xml;charset=UTF-8,${encodeURIComponent(svg)}`;
+}
+
 function setView(name) {
   document.querySelectorAll('.tab').forEach((button) => {
     button.classList.toggle('active', button.dataset.view === name);
@@ -40,10 +51,18 @@ document.querySelectorAll('.tab').forEach((button) => {
   button.addEventListener('click', () => setView(button.dataset.view));
 });
 
+function updateCatalogSummary(health) {
+  state.health = health;
+  document.querySelector('#summary-products').textContent = health.distinctProducts ?? health.productRecords ?? 0;
+  document.querySelector('#summary-images').textContent = health.productsWithImages ?? 0;
+  document.querySelector('#summary-stock').textContent = Number(health.stockUnitsSimulated ?? 0).toLocaleString('pt-BR');
+}
+
 async function loadCompany() {
   const [company, health] = await Promise.all([api('/api/company'), api('/api/health')]);
+  updateCatalogSummary(health);
   document.querySelector('#company-name').textContent = company.name;
-  document.querySelector('#company-status').textContent = `${company.openingHours} • ${health.realProducts} produtos reais • PostgreSQL conectado`;
+  document.querySelector('#company-status').textContent = `${health.distinctProducts} produtos distintos • ${Number(health.stockUnitsSimulated).toLocaleString('pt-BR')} unidades simuladas • PostgreSQL conectado`;
 
   const details = document.querySelector('#company-details');
   details.replaceChildren();
@@ -53,7 +72,9 @@ async function loadCompany() {
     ['Funcionamento', company.openingHours],
     ['Pagamentos simulados', company.payments],
     ['Entregas simuladas', company.delivery],
-    ['Catálogo', `${health.realProducts} identidades reais; preços comerciais não cadastrados`],
+    ['Produtos cadastrados', `${health.distinctProducts} produtos distintos`],
+    ['Imagens cadastradas', `${health.productsWithImages} produtos com imagem`],
+    ['Estoque demonstrativo', `${Number(health.stockUnitsSimulated).toLocaleString('pt-BR')} unidades simuladas distribuídas entre os produtos`],
   ].forEach(([label, value]) => {
     const item = document.createElement('div');
     item.append(textElement('strong', label), textElement('span', value));
@@ -78,12 +99,10 @@ document.querySelector('#chat-form').addEventListener('submit', async (event) =>
   const input = document.querySelector('#chat-input');
   const message = input.value.trim();
   if (!message) return;
-
   addMessage('user', message);
   input.value = '';
   const submit = event.submitter;
   submit.disabled = true;
-
   try {
     const result = await api('/api/chat', {
       method: 'POST',
@@ -102,14 +121,47 @@ document.querySelector('#chat-form').addEventListener('submit', async (event) =>
   }
 });
 
+function productImage(product) {
+  const wrap = document.createElement('div');
+  wrap.className = 'product-image-wrap';
+  const image = document.createElement('img');
+  image.className = 'product-image';
+  image.alt = `Imagem do produto ${product.name}`;
+  image.loading = 'lazy';
+  image.decoding = 'async';
+  image.referrerPolicy = 'no-referrer';
+  image.src = product.imageUrl || placeholderImage(product.name);
+  image.dataset.realSource = product.imageUrl ? 'true' : 'false';
+  image.addEventListener('error', () => {
+    image.dataset.loadError = 'true';
+    image.src = placeholderImage(product.name);
+  }, { once: true });
+  wrap.append(image);
+  return wrap;
+}
+
 function productCard(product) {
   const card = document.createElement('article');
   card.className = 'product-card';
-  card.append(textElement('span', `${product.sku} • ID ${product.id}`, 'tag'));
-  card.append(textElement('h3', product.name));
-  card.append(textElement('p', `${product.category} • ${product.manufacturer}`));
-  card.append(textElement('p', `Apresentação técnica: ${product.presentation}`));
-  card.append(textElement('p', `Registro Anvisa: ${product.anvisaRegistration} • Classe de risco: ${product.riskClass}`));
+  card.dataset.productId = String(product.id);
+  card.dataset.hasImage = product.imageUrl ? 'true' : 'false';
+  card.append(productImage(product));
+
+  const body = document.createElement('div');
+  body.className = 'product-card-body';
+  const identity = product.barcode
+    ? `GTIN ${product.barcode}`
+    : product.anvisaRegistration
+      ? `ANVISA ${product.anvisaRegistration}`
+      : product.sku;
+  body.append(textElement('span', `${identity} • Produto ${product.id} de 500`, 'tag'));
+  body.append(textElement('h3', product.name));
+  body.append(textElement('p', `${product.category} • ${product.manufacturer}`));
+  body.append(textElement('p', `Apresentação: ${product.presentation}`));
+
+  if (product.barcode) body.append(textElement('p', `Código de barras: ${product.barcode}`));
+  if (product.anvisaRegistration) body.append(textElement('p', `Registro Anvisa: ${product.anvisaRegistration}`));
+  if (product.imageSource) body.append(textElement('p', `Imagem: ${product.imageSource}`, 'image-source'));
 
   const meta = document.createElement('div');
   meta.className = 'product-meta';
@@ -117,12 +169,12 @@ function productCard(product) {
   meta.append(textElement(
     'span',
     product.quantityAvailable > 0
-      ? `${product.quantityAvailable} no estoque demonstrativo`
-      : 'Sem estoque demonstrativo',
+      ? `${product.quantityAvailable} unidades simuladas disponíveis`
+      : 'Sem unidades simuladas disponíveis',
     product.quantityAvailable > 0 ? 'stock-ok' : 'stock-zero',
   ));
-  card.append(meta);
-  card.append(textElement('small', 'Identidade do produto: real • Operação: simulada'));
+  body.append(meta);
+  body.append(textElement('small', 'Cadastro do produto: real • Estoque e operação: simulados'));
 
   const reserve = textElement('button', 'Preparar reserva simulada');
   reserve.type = 'button';
@@ -133,7 +185,8 @@ function productCard(product) {
     setView('reservation');
     document.querySelector('#reservation-customer').focus();
   });
-  card.append(reserve);
+  body.append(reserve);
+  card.append(body);
   return card;
 }
 
@@ -145,10 +198,9 @@ async function loadCatalog() {
     state.page = state.totalPages;
     return loadCatalog();
   }
-
-  document.querySelector('#catalog-count').textContent = `${result.total} produtos reais`;
+  document.querySelector('#catalog-count').textContent = `${result.total} produtos distintos`;
   document.querySelector('#catalog-grid').replaceChildren(...result.items.map(productCard));
-  document.querySelector('#page-status').textContent = `Página ${result.page} de ${state.totalPages}`;
+  document.querySelector('#page-status').textContent = `Produtos ${result.firstRecord}–${result.lastRecord} de ${result.total} • Página ${result.page} de ${state.totalPages}`;
   document.querySelector('#prev-page').disabled = state.page <= 1;
   document.querySelector('#next-page').disabled = state.page >= state.totalPages;
 }
@@ -188,7 +240,6 @@ document.querySelector('#reservation-form').addEventListener('submit', async (ev
       quantity: Number(document.querySelector('#reservation-quantity').value),
     }],
   };
-
   try {
     const result = await api('/api/reservations', {
       method: 'POST',
@@ -198,10 +249,7 @@ document.querySelector('#reservation-form').addEventListener('submit', async (ev
     const totalLine = result.totalCents === null || result.totalCents === undefined
       ? 'Total: indisponível — preço comercial não cadastrado'
       : `Total demonstrativo: R$ ${(result.totalCents / 100).toFixed(2).replace('.', ',')}`;
-    showResult(
-      '#reservation-result',
-      `Reserva ${result.id}\nStatus: ${result.status}\nValidade: ${result.expiresAt}\n${totalLine}\nNenhuma venda ou cobrança foi realizada.`,
-    );
+    showResult('#reservation-result', `Reserva ${result.id}\nStatus: ${result.status}\nValidade: ${result.expiresAt}\n${totalLine}\nNenhuma venda ou cobrança foi realizada.`);
   } catch (error) {
     showResult('#reservation-result', error.message, true);
   }
@@ -213,7 +261,6 @@ function buildTable(headers, rows) {
   const headerRow = document.createElement('tr');
   headers.forEach((header) => headerRow.append(textElement('th', header)));
   head.append(headerRow);
-
   const body = document.createElement('tbody');
   rows.forEach((values) => {
     const row = document.createElement('tr');
@@ -227,21 +274,21 @@ function buildTable(headers, rows) {
 async function loadReports() {
   const report = await api('/api/reports');
   const cards = [
-    ['Produtos reais', report.realIdentityProducts],
+    ['Produtos distintos', report.distinctProducts],
+    ['Produtos com imagem', report.productsWithImages],
+    ['Unidades simuladas', Number(report.stockUnitsSimulated || 0).toLocaleString('pt-BR')],
     ['Preços não cadastrados', report.productsWithoutPrice],
     ['Atendimentos', report.totalAttendances],
     ['Reservas simuladas', report.reservations],
     ['Encaminhamentos', report.handoffs],
-    ['Sem estoque demonstrativo', report.outOfStockProducts],
+    ['Produtos sem estoque', report.outOfStockProducts],
   ];
-
   document.querySelector('#report-cards').replaceChildren(...cards.map(([label, value]) => {
     const card = document.createElement('div');
     card.className = 'report-card';
     card.append(textElement('span', label), textElement('strong', value));
     return card;
   }));
-
   const rows = (report.mostQueriedProducts || []).map((item) => [item.name, item.queries]);
   document.querySelector('#top-products').replaceChildren(buildTable(['Produto', 'Consultas'], rows));
 }
