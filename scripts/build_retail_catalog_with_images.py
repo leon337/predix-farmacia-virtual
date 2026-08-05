@@ -6,6 +6,7 @@ import hashlib
 import json
 import re
 import unicodedata
+import urllib.parse
 import urllib.request
 from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timezone
@@ -13,14 +14,21 @@ from pathlib import Path
 from typing import Any
 
 TARGET_COUNT = 500
-CANDIDATE_LIMIT = 6000
+CANDIDATE_LIMIT = 8000
 IMAGE_WORKERS = 12
 ROOT = Path(__file__).resolve().parents[1]
 OUTPUT = ROOT / "data" / "retail_products_with_images.json"
 REPORT = ROOT / "audit" / "MCF-PFV-CATALOG-IMAGES-001" / "SOURCE-REPORT.md"
 DUMP_URL = "https://static.openbeautyfacts.org/data/en.openbeautyfacts.org.products.csv"
 IMAGE_SOURCE = "Open Beauty Facts"
+IMAGE_HOST = "images.openbeautyfacts.org"
 USER_AGENT = "PredixFarmaciaVirtual/1.0 (https://github.com/leon337/predix-farmacia-virtual)"
+
+FOOD_TERMS = re.compile(
+    r"\b(p[aã]o|arroz|feij[aã]o|milho|farinha|biscoit|bolach|chocolate|caf[eé]|leite|queijo|iogurte|manteiga|margarina|macarr[aã]o|massa|bolo|sorvete|pizza|hamb[uú]rguer|sandu[ií]che|carne|frango|peixe|lingui[cç]a|cerveja|vinho|refrigerante|suco|bebida|snack|cereal|granola|a[cç][uú]car|sal|tempero|molho|doce|bombom|geleia|mel\b)\b",
+    re.IGNORECASE,
+)
+QUANTITY_ONLY = re.compile(r"^\s*\d+(?:[.,]\d+)?\s*(?:mg|g|kg|ml|cl|dl|l|un|unid|unidade|unidades)?\s*$", re.IGNORECASE)
 
 
 def clean(value: Any) -> str:
@@ -35,6 +43,22 @@ def normalized(value: str) -> str:
 
 def valid_barcode(value: str) -> bool:
     return bool(re.fullmatch(r"\d{8,14}", value))
+
+
+def valid_brand(value: str) -> bool:
+    return bool(re.search(r"[A-Za-zÀ-ÿ]", value)) and not QUANTITY_ONLY.fullmatch(value)
+
+
+def valid_product_name(value: str) -> bool:
+    return len(value) >= 3 and not FOOD_TERMS.search(normalized(value))
+
+
+def valid_image_url(value: str) -> bool:
+    try:
+        parsed = urllib.parse.urlparse(value)
+        return parsed.scheme == "https" and parsed.hostname == IMAGE_HOST and bool(parsed.path)
+    except ValueError:
+        return False
 
 
 def first_value(row: dict[str, str], *keys: str) -> str:
@@ -59,10 +83,12 @@ def image_is_reachable(url: str, timeout: int = 20) -> bool:
 
 
 def category_from(row: dict[str, str]) -> str:
-    categories = first_value(row, "categories", "categories_en", "categories_tags")
+    categories = first_value(row, "categories", "categories_en", "categories_tags", "main_category", "main_category_en")
     if categories:
         raw = categories.split(",")[0].split(":")[-1].replace("-", " ")
-        return clean(raw).title()[:120]
+        value = clean(raw).title()[:120]
+        if value and not FOOD_TERMS.search(normalized(value)):
+            return value
     return "Higiene e cuidados pessoais"
 
 
@@ -85,6 +111,9 @@ def parse_dump(path: Path) -> tuple[list[dict[str, Any]], dict[str, int], list[s
         "missingName": 0,
         "missingBrand": 0,
         "missingImage": 0,
+        "foodOrNonBeauty": 0,
+        "invalidBrand": 0,
+        "invalidImageHost": 0,
         "duplicates": 0,
     }
 
@@ -115,11 +144,20 @@ def parse_dump(path: Path) -> tuple[list[dict[str, Any]], dict[str, int], list[s
             if not name:
                 stats["missingName"] += 1
                 continue
+            if not valid_product_name(name):
+                stats["foodOrNonBeauty"] += 1
+                continue
             if not brand:
                 stats["missingBrand"] += 1
                 continue
-            if not image_url.startswith("https://"):
+            if not valid_brand(brand):
+                stats["invalidBrand"] += 1
+                continue
+            if not image_url:
                 stats["missingImage"] += 1
+                continue
+            if not valid_image_url(image_url):
+                stats["invalidImageHost"] += 1
                 continue
 
             identity = (normalized(name), normalized(brand))
@@ -202,6 +240,7 @@ def build_catalog(path: Path) -> tuple[list[dict[str, Any]], dict[str, Any]]:
         "headersDetected": headers,
         "statistics": stats,
         "candidates": len(candidates),
+        "excludedFoodTerms": FOOD_TERMS.pattern,
     }
     return products, metadata
 
@@ -244,12 +283,14 @@ def main() -> int:
         f"- SHA-256 do catálogo: `{catalog_sha}`\n"
         f"- Gerado em: `{generated_at}`\n"
         f"- Registros examinados: `{source_meta['statistics']['scanned']}`\n"
+        f"- Registros excluídos como alimento/não beleza: `{source_meta['statistics']['foodOrNonBeauty']}`\n"
+        f"- Fabricantes inválidos excluídos: `{source_meta['statistics']['invalidBrand']}`\n"
         "- Fonte: `Open Beauty Facts`\n"
         "- Identidade: código de barras + nome + marca\n"
         "- Estoque: separado do cadastro e inteiramente simulado\n"
         "- Preços: ausentes; nenhum valor inventado\n\n"
         "As imagens são URLs frontais de embalagem publicadas pela base aberta. "
-        "Cada uma respondeu como conteúdo de imagem durante a geração.\n",
+        "Cada uma respondeu como conteúdo de imagem durante a geração. Alimentos e registros com marca inválida foram rejeitados.\n",
         encoding="utf-8",
     )
 
