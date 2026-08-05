@@ -1,20 +1,28 @@
 mission_id: MCF-PFV-DEPLOY-002
-status: CANDIDATE_READY_FOR_REVIEW
+status: DELIVERED_AND_BROWSER_VALIDATED
 risk_class: B
 human_authority: Leandro
 operational_authority: Léo
 coordinator: Mestre
-branch: fix/frontend-render-real-browser
-base_sha: d5f70a425e50775588c550eb49b416b76c1dc72f
 public_url: https://predix-farmacia-virtual.onrender.com
 legacy_url_behavior: HTTP_302_TO_PUBLIC_URL
+repository:
+  pull_request: 3
+  candidate_sha: 94de24e7e3d48e21f9c8fd26bfc43d12c8d65a3b
+  merge_sha: 9803df8400e3ff4824bc6aa4ba50a31362e134ed
+  merge_method: squash
 render:
   service_id: srv-d9pkpvu7bikc739i54u0
-  deploy_id: dep-d9pkq0e7bikc739i55sg
+  deploy_id: dep-d9pl646gekts73dp0cjg
+  deployed_sha: 9803df8400e3ff4824bc6aa4ba50a31362e134ed
   status: live
+  tracked_branch: fix/frontend-render-real-browser
+  tracked_branch_synced_to_main_sha: true
+  connector_branch_update_supported: false
 supabase:
   project_id: qylqyhxpwffiripcpjej
   api_function: predix-api
+  legacy_frontend_function: predix-farmacia
   legacy_frontend_function_version: 2
   database: postgres
   products: 500
@@ -23,13 +31,26 @@ security:
   new_public_admin_key_created: false
   public_admin_ui_removed: true
   rls_enabled: true
-browser_validation:
-  run_id: 31017058315
-  job_id: 92343746550
-  conclusion: success
+  rpc_public_execute_revoked: true
+main_validation:
+  ci:
+    run_id: 31019147498
+    conclusion: success
+  remote_deploy_smoke:
+    run_id: 31019147984
+    conclusion: success
+  browser_render_smoke:
+    run_id: 31019147803
+    conclusion: success
+    raw_html_visible: false
+    mobile_screenshot: true
+independent_evidence:
+  original_browser_run_id: 31017058315
+  original_browser_job_id: 92343746550
   artifact_id: 8934936197
-  raw_html_visible: false
-  mobile_screenshot: true
+  artifact_digest: sha256:1a83b93d909cdde81de4ddaa8753777ce2c4a573d6e31550831bfcfbb7496adb
 audit:
   emily: PASS_WITH_RECORDED_DEVIATIONS
-next_gate: VINICIUS_PR_REVIEW
+  vinicius: PASS_WITH_RECORDED_HISTORY
+  leo_gate: APPROVED
+next_gate: NONE
