@@ -5,14 +5,16 @@
 - Tamanho do dump: `167614987` bytes
 - Produtos distintos: `500`
 - Produtos com imagem verificada: `500`
-- SHA-256 do catálogo: `2e624c9ef6063a7b7283302fa91bda67557d792fc6790d8100983b5d5e5db3bb`
-- Gerado em: `2026-08-05T22:43:33.292128+00:00`
+- Produtos com evidência de escopo persistida: `500`
+- SHA-256 do catálogo: `872658ab3eb807e60a03127a622ad1d2d03f5c17f58f4a04d6069ce22ab5326f`
+- Gerado em: `2026-08-05T22:53:29.634704+00:00`
 - Registros examinados: `64237`
-- Registros fora do escopo de cuidados pessoais: `20519`
-- Fabricantes inválidos excluídos: `18`
+- Registros fora do escopo de cuidados pessoais: `19702`
+- Fabricantes inválidos excluídos: `34`
 - Fonte: `Open Beauty Facts`
 - Identidade: código de barras + nome + marca
 - Escopo exigido: higiene, beleza e cuidados pessoais
+- Evidência de escopo: preservada em cada ficha no campo `scopeEvidence`
 - Medicamentos, alimentos, bebidas e itens domésticos incompatíveis: excluídos
 - Estoque: separado do cadastro e inteiramente simulado
 - Preços: ausentes; nenhum valor inventado
