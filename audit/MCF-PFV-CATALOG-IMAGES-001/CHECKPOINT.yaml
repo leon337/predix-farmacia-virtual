@@ -1,11 +1,10 @@
 mission_id: MCF-PFV-CATALOG-IMAGES-001
-status: CANDIDATE_BROWSER_VALIDATED_AWAITING_PR
+status: DELIVERED_500_DISTINCT_PRODUCTS_WITH_IMAGES_BROWSER_VALIDATED
 risk_class: B
 human_authority: Leandro
 operational_authority: Leo
 coordinator: Mestre
-branch: feat/catalogo-500-produtos-com-imagens
-candidate_sha: 4436983a9054180fca7dd46e2a1534f1aab13e67
+final_main_sha: 244eb25e26718ea533ea279fdd7d438a078fad6e
 catalog:
   product_records: 500
   distinct_barcodes: 500
@@ -25,33 +24,55 @@ api:
   function_version: 4
   semantic_version: 1.2.0
   digest: 31c1b6b6536610912a4c83d3a29c7e6640635f0527c124fc1b4c5254bcba3664
+integration:
+  functional_pr: 7
+  functional_pr_final_head: cb8b0461b693cb15fc83ec069121c587fa04303d
+  functional_merge_sha: 9ed6694ea599b276a6406464767ad9a7bf997bd9
+  corrective_pr: 8
+  corrective_pr_head: 3156bdef609bae749dae68e1bb4051f2157035bc
+  corrective_merge_sha: 244eb25e26718ea533ea279fdd7d438a078fad6e
 validation:
-  candidate_ci_run: 31054834148
-  candidate_ci_job: 92469963968
-  candidate_remote_smoke_run: 31054866901
-  candidate_browser_run: 31054866941
-  candidate_browser_job: 92470061636
+  functional_pr_ci_run: 31055398649
+  functional_pr_remote_smoke_run: 31055398764
+  functional_pr_browser_run: 31055398811
+  post_functional_merge_ci_run: 31055528185
+  post_functional_merge_remote_smoke_run: 31055530374
+  post_functional_merge_failed_browser_run: 31055528629
+  post_functional_merge_failed_browser_job: 92472083071
+  corrective_pr_ci_run: 31055727024
+  corrective_pr_remote_smoke_run: 31055727021
+  corrective_pr_browser_run: 31055727017
+  corrective_pr_browser_job: 92472683269
+  final_main_ci_run: 31055829595
+  final_main_remote_smoke_run: 31055829741
+  final_main_browser_run: 31055828143
 browser_evidence:
-  artifact_id: 8949856177
-  artifact_digest: sha256:90a2b44144812d7b53b10dfaebf2ef89396d03c30a95be2f8e3b550a573189bb
+  artifact_id: 8950191480
+  artifact_digest: sha256:d2fd52038f5419fa455cc142fdd458997c13834af1c1b17937eb0603bb495fae
+  screenshot_sha256: 4442f4e4a178a5564ab27f1127ad3bb979930bcad0e7abf9451e7b2e288b87fa
+  rendered_dom_sha256: 6f355a5bc4523bf69605562a4a29f66fc9585edb5315a1a4a18744d8e76468d9
+  sample_product_image_sha256: bb26489133641b49fc0144d216332d666414bbf655c05db48d0dcdb5f109d926
   cards_first_page: 24
   external_images_first_page: 24
   image_fallback_errors: 0
 render:
   service_id: srv-d9pkpvu7bikc739i54u0
-  candidate_deploy_id: dep-d9ps19bncjis73f6iorg
-  candidate_deployed_sha: 4436983a9054180fca7dd46e2a1534f1aab13e67
+  final_deploy_id: dep-d9ps9449v7es73e7ahj0
+  final_deployed_sha: 244eb25e26718ea533ea279fdd7d438a078fad6e
   status: live
+  url: https://predix-farmacia-virtual.onrender.com
 gates:
   source: PASS
   catalog: PASS
   database: PASS
   api: PASS
   frontend: PASS
-  candidate_ci: PASS
-  candidate_remote_smoke: PASS
-  candidate_browser: PASS
+  functional_pr: PASS
+  corrective_pr: PASS
+  final_main_ci: PASS
+  final_main_remote_smoke: PASS
+  final_main_browser: PASS
   emily: PASS_WITH_RECORDED_DEVIATIONS
-  vinicius: PENDING_PR
-  leo: PENDING_FINAL_GATE
-next_gate: OPEN_PR_AND_REVIEW
+  vinicius: PASS_WITH_RECORDED_HISTORY
+  leo: APPROVED
+pending_gates: 0
