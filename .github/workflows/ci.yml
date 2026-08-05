@@ -23,53 +23,10 @@ jobs:
         run: python -m compileall -q app.py tests scripts
 
       - name: Validate browser JavaScript
-        run: |
-          node --check public/app.js
-          node --check public/startup.js
+        run: node --check public/app.js
 
-      - name: Validate catalog with 500 distinct products and images
-        run: |
-          python - <<'PY'
-          import hashlib
-          import json
-          import re
-          from pathlib import Path
-          from urllib.parse import urlparse
-
-          path = Path('data/retail_products_with_images.json')
-          report = Path('audit/MCF-PFV-CATALOG-IMAGES-001/SOURCE-REPORT.md').read_text(encoding='utf-8')
-          raw = path.read_bytes()
-          sha = hashlib.sha256(raw).hexdigest()
-          payload = json.loads(raw)
-          products = payload['products']
-          meta = payload['meta']
-
-          food = re.compile(r'\b(p[aã]o|arroz|feij[aã]o|milho|farinha|biscoit|bolach|chocolate|caf[eé]|leite|queijo|iogurte|manteiga|margarina|macarr[aã]o|massa|bolo|sorvete|pizza|hamb[uú]rguer|sandu[ií]che|carne|frango|peixe|lingui[cç]a|cerveja|vinho|refrigerante|suco|bebida|snack|cereal|granola|a[cç][uú]car|tempero|molho|bombom|geleia)\b', re.I)
-          quantity_brand = re.compile(r'^\s*\d+(?:[.,]\d+)?\s*(?:mg|g|kg|ml|cl|dl|l|un|unid|unidade|unidades)?\s*$', re.I)
-
-          assert len(products) == 500
-          assert meta['acceptedProducts'] == 500
-          assert meta['distinctProducts'] == 500
-          assert meta['productsWithImages'] == 500
-          assert meta['stockUnitsAreSeparate'] is True
-          assert meta['operationsAreSimulated'] is True
-          assert meta['pricesAreUnavailable'] is True
-          assert len({p['id'] for p in products}) == 500
-          assert len({p['sku'] for p in products}) == 500
-          assert len({p['barcode'] for p in products}) == 500
-          assert len({(p['name'].casefold(), p['manufacturer'].casefold()) for p in products}) == 500
-          assert all(re.fullmatch(r'\d{8,14}', p['barcode']) for p in products)
-          assert all(p['name'] and p['manufacturer'] and p['category'] for p in products)
-          assert all(not food.search(p['name']) for p in products)
-          assert all(not quantity_brand.fullmatch(p['manufacturer']) for p in products)
-          assert all(urlparse(p['imageUrl']).hostname == 'images.openbeautyfacts.org' for p in products)
-          assert all(p['imageSource'] == 'Open Beauty Facts' for p in products)
-          assert all(p['priceCents'] is None for p in products)
-          assert all(p['identityReal'] is True for p in products)
-          assert all(p['operationsSimulated'] is True for p in products)
-          assert sha in report
-          print(f'RETAIL_CATALOG_PASS products=500 distinct=500 images=500 sha={sha}')
-          PY
+      - name: Independently validate 500 distinct products with images
+        run: python scripts/validate_retail_catalog.py
 
       - name: Validate frontend contract
         run: |
@@ -77,8 +34,11 @@ jobs:
           grep --quiet 'produtos distintos' public/index.html
           grep --quiet 'unidades simuladas em estoque' public/index.html
           grep --quiet 'images.openbeautyfacts.org' public/index.html
+          grep --quiet 'catalog-images-20260805-1' public/index.html
+          ! grep --quiet 'startup.js' public/index.html
           grep --quiet 'product-image' public/app.js
           grep --quiet 'stockUnitsSimulated' public/app.js
+          grep --quiet 'unidades simuladas disponíveis' public/app.js
 
       - name: Test local MVP
         run: python -m unittest discover -s tests -v
