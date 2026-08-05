@@ -6,19 +6,17 @@ import re
 from pathlib import Path
 from urllib.parse import urlparse
 
+from build_retail_catalog_with_images import (
+    CARE_TERMS,
+    FOOD_TERMS,
+    HOUSEHOLD_TERMS,
+    MEDICINE_TERMS,
+    QUANTITY_ONLY,
+)
+
 ROOT = Path(__file__).resolve().parents[1]
 CATALOG = ROOT / "data" / "retail_products_with_images.json"
 REPORT = ROOT / "audit" / "MCF-PFV-CATALOG-IMAGES-001" / "SOURCE-REPORT.md"
-
-BLOCKED = re.compile(
-    r"\b(rooibos|advil|antacid|antiacid|tablet|tablets|comprimido|comprimidos|capsule|capsules|c[aá]psula|c[aá]psulas|syrup|xarope|medicine|medication|medicament|m[eé]dicament|ibuprofen|ibuprofeno|aspirin|aspirina|acetaminophen|paracetamol|analgesic|analg[eé]sico|pain relief|allergy relief|antifungal|anti fungal|antif[uú]ngico|laxative|laxante|suppository|suposit[oó]rio|nicotine|nicotina|cbd|thc|sleep aid|sleeping pills|cough syrup|cold and flu|bathroom tissue|toilet paper|paper towel|papel higi[eê]nico|papel toalha|laundry|detergent|dish soap|dishwashing|bleach|floor cleaner|surface cleaner|trash bag|garbage bag|p[aã]o|arroz|feij[aã]o|milho|farinha|biscoit|bolach|chocolate|caf[eé]|coffee|tea|leite|milk|queijo|iogurte|manteiga|margarina|macarr[aã]o|massa|bolo|sorvete|pizza|hamb[uú]rguer|sandu[ií]che|carne|frango|peixe|lingui[cç]a|cerveja|vinho|refrigerante|suco|juice|bebida|drink|snack|cereal|granola|a[cç][uú]car|sugar|tempero|molho|doce|bombom|geleia)\b",
-    re.IGNORECASE,
-)
-CARE = re.compile(
-    r"\b(shampoo|conditioner|acondicionador|condicionador|hair mask|hair cream|hair oil|hair gel|hair spray|hair serum|cabelo|capilar|cheveux|capillaire|scalp|soap|sabonete|savon|shower gel|gel douche|body wash|deodorant|d[eé]odorant|antiperspirant|anti transpirant|toothpaste|dentifrice|mouthwash|bain de bouche|oral rinse|cream|cr[eè]me|creme|hidratante|moisturizer|moisturiser|moisturizing|lotion|lo[cç][aã]o|serum|s[eé]rum|cleanser|cleansing|nettoyant|face wash|facial|visage|face cream|body cream|body lotion|corps|body care|skin care|skincare|skin|peau|derm|sunscreen|sun cream|solar|solaire|spf|fps|after sun|mask|masque|m[aá]scara facial|makeup|maquillage|lipstick|batom|foundation|concealer|blush|mascara|nail polish|nail care|esmalte|removedor|ongle|perfume|parfum|eau de toilette|eau de parfum|cologne|col[oô]nia|shaving|aftershave|rasage|barba|beard|balm|baume|lip balm|l[eè]vres|acne|exfoliant|scrub|esfoliante|hand cream|hand soap|mains|m[aã]os|dental floss|fio dental|toothbrush|escova dental|oral care|dental care|hygiene|hygi[eè]ne|cosmetic|cosm[eé]tique|baby shampoo|baby lotion|baby wash|bebe|beb[eê]|diaper cream|assadura)\b",
-    re.IGNORECASE,
-)
-QUANTITY_ONLY = re.compile(r"^\s*\d+(?:[.,]\d+)?\s*(?:mg|g|kg|ml|cl|dl|l|un|unid|unidade|unidades)?\s*$", re.IGNORECASE)
 
 
 def main() -> int:
@@ -48,8 +46,10 @@ def main() -> int:
         searchable = " ".join((product["name"], product["category"]))
         assert re.fullmatch(r"\d{8,14}", product["barcode"]), product
         assert product["name"] and product["manufacturer"] and product["category"], product
-        assert not BLOCKED.search(searchable), product
-        assert CARE.search(searchable), product
+        assert not FOOD_TERMS.search(searchable), product
+        assert not MEDICINE_TERMS.search(searchable), product
+        assert not HOUSEHOLD_TERMS.search(searchable), product
+        assert CARE_TERMS.search(searchable), product
         assert not QUANTITY_ONLY.fullmatch(product["manufacturer"]), product
         assert urlparse(product["imageUrl"]).hostname == "images.openbeautyfacts.org", product
         assert product["imageSource"] == "Open Beauty Facts", product
