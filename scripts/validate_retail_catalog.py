@@ -12,6 +12,7 @@ from build_retail_catalog_with_images import (
     HOUSEHOLD_TERMS,
     MEDICINE_TERMS,
     QUANTITY_ONLY,
+    normalized,
 )
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -45,14 +46,15 @@ def main() -> int:
 
     for product in products:
         evidence = str(product.get("scopeEvidence") or "").strip()
-        searchable = " ".join((product["name"], product["category"], evidence))
+        searchable = normalized(" ".join((product["name"], product["category"], evidence)))
+        normalized_evidence = normalized(evidence)
         assert re.fullmatch(r"\d{8,14}", product["barcode"]), product
         assert product["name"] and product["manufacturer"] and product["category"], product
         assert evidence, product
         assert not FOOD_TERMS.search(searchable), product
         assert not MEDICINE_TERMS.search(searchable), product
         assert not HOUSEHOLD_TERMS.search(searchable), product
-        assert CARE_TERMS.search(evidence), product
+        assert CARE_TERMS.search(normalized_evidence), product
         assert not QUANTITY_ONLY.fullmatch(product["manufacturer"]), product
         assert urlparse(product["imageUrl"]).hostname == "images.openbeautyfacts.org", product
         assert product["imageSource"] == "Open Beauty Facts", product
