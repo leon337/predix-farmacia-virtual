@@ -2,7 +2,7 @@ name: CI
 
 on:
   push:
-    branches: [main, feat/mvp-funcionario-virtual, feat/catalogo-real-anvisa, feat/catalogo-500-produtos-com-imagens]
+    branches: [main, feat/mvp-funcionario-virtual, feat/catalogo-real-anvisa, feat/catalogo-500-produtos-com-imagens, feat/medicamentos-imagens-oficiais-layout]
   pull_request:
     branches: [main]
 
