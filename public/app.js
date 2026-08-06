@@ -4,17 +4,12 @@ const API_BASE = 'https://qylqyhxpwffiripcpjej.supabase.co/functions/v1/predix-a
 const state = {
   page: 1,
   totalPages: 1,
-  sessionId: crypto.randomUUID(),
   health: null,
 };
 
-async function api(path, options = {}) {
+async function api(path) {
   const response = await fetch(`${API_BASE}${path}`, {
-    ...options,
-    headers: {
-      'Content-Type': 'application/json',
-      ...(options.headers || {}),
-    },
+    headers: { 'Content-Type': 'application/json' },
   });
   const data = await response.json().catch(() => ({}));
   if (!response.ok) throw new Error(data.error || data.message || `Erro HTTP ${response.status}`);
@@ -58,63 +53,12 @@ function updateCatalogSummary(health) {
   document.querySelector('#summary-stock').textContent = Number(health.stockUnitsSimulated ?? 0).toLocaleString('pt-BR');
 }
 
-async function loadCompany() {
+async function loadEnvironment() {
   const [company, health] = await Promise.all([api('/api/company'), api('/api/health')]);
   updateCatalogSummary(health);
   document.querySelector('#company-name').textContent = company.name;
   document.querySelector('#company-status').textContent = `${health.distinctProducts} produtos distintos • ${Number(health.stockUnitsSimulated).toLocaleString('pt-BR')} unidades simuladas • PostgreSQL conectado`;
-
-  const details = document.querySelector('#company-details');
-  details.replaceChildren();
-  [
-    ['Endereço demonstrativo', company.address],
-    ['Telefone demonstrativo', company.phone],
-    ['Funcionamento', company.openingHours],
-    ['Produtos cadastrados', `${health.distinctProducts} produtos distintos`],
-    ['Imagens cadastradas', `${health.productsWithImages} produtos com imagem`],
-    ['Estoque demonstrativo', `${Number(health.stockUnitsSimulated).toLocaleString('pt-BR')} unidades simuladas`],
-    ['Operações públicas', 'Consulta informativa; sem venda ou reserva'],
-  ].forEach(([label, value]) => {
-    const item = document.createElement('div');
-    item.append(textElement('strong', label), textElement('span', value));
-    details.append(item);
-  });
 }
-
-function addMessage(role, message, sources = [], handoff = false) {
-  const container = document.querySelector('#chat-log');
-  const item = document.createElement('div');
-  item.className = `message ${role}`;
-  item.append(textElement('strong', role === 'user' ? 'Você' : 'Funcionário Virtual'));
-  item.append(textElement('p', message));
-  if (sources.length) item.append(textElement('small', `Fontes: ${sources.join(', ')}`));
-  if (handoff) item.append(textElement('small', 'Encaminhamento humano demonstrativo registrado'));
-  container.append(item);
-  container.scrollTop = container.scrollHeight;
-}
-
-document.querySelector('#chat-form').addEventListener('submit', async (event) => {
-  event.preventDefault();
-  const input = document.querySelector('#chat-input');
-  const message = input.value.trim();
-  if (!message) return;
-  addMessage('user', message);
-  input.value = '';
-  const submit = event.submitter;
-  submit.disabled = true;
-  try {
-    const result = await api('/api/chat', {
-      method: 'POST',
-      body: JSON.stringify({ message, sessionId: state.sessionId }),
-    });
-    addMessage('assistant', result.message, result.sources || [], result.handoffRequired);
-  } catch (error) {
-    addMessage('assistant', `Falha controlada: ${error.message}`);
-  } finally {
-    submit.disabled = false;
-    input.focus();
-  }
-});
 
 function productImage(product) {
   const wrap = document.createElement('div');
@@ -250,8 +194,7 @@ async function loadReports() {
     ['Produtos com imagem', report.productsWithImages],
     ['Unidades simuladas', Number(report.stockUnitsSimulated || 0).toLocaleString('pt-BR')],
     ['Preços não cadastrados', report.productsWithoutPrice],
-    ['Atendimentos', report.totalAttendances],
-    ['Encaminhamentos', report.handoffs],
+    ['Consultas registradas', report.totalAttendances],
     ['Produtos sem estoque', report.outOfStockProducts],
   ];
 
@@ -274,4 +217,4 @@ function showGlobalError(error) {
   document.querySelector('#company-status').textContent = `Falha controlada: ${error.message}`;
 }
 
-Promise.all([loadCompany(), loadCatalog()]).catch(showGlobalError);
+Promise.all([loadEnvironment(), loadCatalog()]).catch(showGlobalError);
