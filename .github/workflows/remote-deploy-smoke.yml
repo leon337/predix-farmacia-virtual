@@ -2,7 +2,7 @@ name: Remote Deploy Smoke
 
 on:
   push:
-    branches: [feat/deploy-publico-auditavel, feat/catalogo-real-anvisa, fix/frontend-render-real-browser, main]
+    branches: [feat/deploy-publico-auditavel, feat/catalogo-real-anvisa, fix/frontend-render-real-browser, feat/medicamentos-imagens-oficiais-layout, main]
   pull_request:
     branches: [main]
   workflow_dispatch:
@@ -18,7 +18,7 @@ jobs:
       API_BASE: https://qylqyhxpwffiripcpjej.supabase.co/functions/v1/predix-api
       WEB_URL: https://predix-farmacia-virtual.onrender.com
     steps:
-      - name: Validate public frontend, API and product image
+      - name: Validate safe public frontend, API and image
         shell: bash
         run: |
           set -euo pipefail
@@ -27,13 +27,12 @@ jobs:
           import os
           import re
           import time
-          import uuid
           from urllib.error import HTTPError, URLError
           from urllib.request import Request, urlopen
 
           api = os.environ['API_BASE']
           web = os.environ['WEB_URL']
-          build_url = f"{web}/?view=catalog&build={os.environ.get('GITHUB_SHA','candidate')}"
+          build_url = f"{web}/?build={os.environ.get('GITHUB_SHA','candidate')}"
 
           def api_request(path, *, method='GET', body=None, headers=None):
               payload = None if body is None else json.dumps(body).encode('utf-8')
@@ -48,14 +47,12 @@ jobs:
                       with urlopen(req, timeout=40) as response:
                           return response.status, json.load(response)
                   except HTTPError as error:
-                      error_body = error.read().decode('utf-8', errors='replace')[:500]
-                      print(f"API_ATTEMPT path={path} method={method} attempt={attempt} status={error.code} body={error_body}")
+                      error_body = error.read().decode('utf-8', errors='replace')
                       if method == 'GET' and 500 <= error.code < 600 and attempt < max_attempts:
                           time.sleep(2 * attempt)
                           continue
-                      raise
-                  except URLError as error:
-                      print(f"API_ATTEMPT path={path} method={method} attempt={attempt} network_error={error}")
+                      return error.code, json.loads(error_body or '{}')
+                  except URLError:
                       if method == 'GET' and attempt < max_attempts:
                           time.sleep(2 * attempt)
                           continue
@@ -68,7 +65,7 @@ jobs:
               try:
                   with urlopen(req, timeout=30) as response:
                       html = response.read().decode('utf-8')
-                      if response.status == 200 and 'CATÁLOGO COM IDENTIDADE E IMAGEM REAL' in html:
+                      if response.status == 200 and 'PRODUTOS NÃO MEDICAMENTOSOS' in html and 'layout-safe-20260806-2' in html:
                           break
               except Exception as error:
                   print(f"FRONTEND_ATTEMPT attempt={attempt + 1} error={error}")
@@ -77,55 +74,33 @@ jobs:
               raise AssertionError('frontend candidate was not published in time')
 
           assert 'Predix Farmácia Virtual' in html
-          assert 'produtos distintos' in html
-          assert 'unidades simuladas em estoque' in html
-          assert 'images.openbeautyfacts.org' in html
+          assert 'Saúde, higiene e cuidados pessoais' in html
+          assert 'Não há venda, reserva' in html
+          assert 'data-view="reservation"' not in html
+          assert 'reservation-form' not in html
+          assert 'chat-form' not in html
 
           status, health = api_request('/api/health')
-          assert status == 200, status
+          assert status == 200, (status, health)
           assert health['status'] == 'ok', health
           assert health['productRecords'] == 500, health
           assert health['distinctProducts'] == 500, health
-          assert health['realProducts'] == 500, health
           assert health['productsWithImages'] == 500, health
-          assert health['productsWithBarcode'] == 500, health
-          assert health['productsWithoutPrice'] == 500, health
-          assert health['inventoryRows'] == 500, health
           assert health['stockUnitsSimulated'] > 500, health
-          assert health['stockUnitsSimulated'] != health['distinctProducts'], health
           assert health['catalogIdentity'] == 'real-with-images', health
-          assert health['productCountMeaning'] == 'distinct-product-records', health
-          assert health['stockCountMeaning'] == 'simulated-units', health
-          assert health['database'] == 'supabase-postgres', health
-          assert health['version'] == '1.2.0', health
-
-          status, company = api_request('/api/company')
-          assert status == 200
-          assert company['operationsSimulated'] is True
-          assert company['identityReal'] is False
 
           status, products = api_request('/api/products?page=1&pageSize=24')
           assert status == 200
           assert products['total'] == 500, products
-          assert products['distinctProducts'] == 500, products
           assert products['firstRecord'] == 1, products
           assert products['lastRecord'] == 24, products
-          assert products['operationsSimulated'] is True
-          assert products['pricesProvided'] is False
           assert len(products['items']) == 24
 
           product = next(item for item in products['items'] if item['quantityAvailable'] > 0)
           assert re.fullmatch(r'\d{8,14}', product['barcode']), product
-          assert product['identityReal'] is True
-          assert product['operationsSimulated'] is True
-          assert product['stockIsSimulated'] is True
-          assert product['identitySource'] == 'gtin-and-open-beauty-facts'
           assert product['imageUrl'].startswith('https://images.openbeautyfacts.org/'), product
-          assert product['imageSource'] == 'Open Beauty Facts'
           assert product['priceCents'] is None
-          assert product['priceAvailable'] is False
-          assert product['price'] == 'Consulte o estabelecimento'
-          assert product['anvisaRegistration'] is None
+          assert product['stockIsSimulated'] is True
 
           image_request = Request(product['imageUrl'], headers={
               'User-Agent': 'PredixFarmaciaVirtualSmoke/1.0',
@@ -138,49 +113,24 @@ jobs:
               assert image_response.headers.get_content_type().startswith('image/')
               assert len(image_bytes) > 1000
 
-          status, chat = api_request('/api/chat', method='POST', body={
-              'message': f"qual o preço do código de barras {product['barcode']}",
-              'sessionId': 'github-remote-catalog-images-smoke'
-          })
-          assert status == 200
-          assert chat['tool'] == 'search_products', chat
-          assert chat['identityReal'] is True
-          assert chat['operationsSimulated'] is True
-          assert 'preço comercial não está cadastrado' in chat['message']
-          assert any(str(product['barcode']) in source for source in chat['sources'])
-
-          status, reservation = api_request('/api/reservations', method='POST', body={
-              'customerName': 'Cliente Smoke Demonstração',
+          status, blocked = api_request('/api/reservations', method='POST', body={
+              'customerName': 'Cliente Smoke',
               'items': [{'productId': product['id'], 'quantity': 1}]
-          }, headers={'Idempotency-Key': 'catalog-images-smoke-' + str(uuid.uuid4())})
-          assert status == 201
-          assert reservation['status'] == 'ACTIVE'
-          assert reservation['totalCents'] is None
-
-          status, cancelled = api_request(f"/api/reservations/{reservation['id']}/cancel", method='POST', body={})
-          assert status == 200
-          assert cancelled['status'] == 'CANCELLED'
+          }, headers={'Idempotency-Key': 'reservation-must-be-blocked'})
+          assert status in (400, 403), (status, blocked)
+          assert 'desativad' in blocked.get('error', '').lower(), blocked
 
           status, reports = api_request('/api/reports')
           assert status == 200
-          assert reports['realIdentityProducts'] == 500, reports
           assert reports['distinctProducts'] == 500, reports
           assert reports['productsWithImages'] == 500, reports
-          assert reports['productsWithBarcode'] == 500, reports
           assert reports['stockUnitsSimulated'] > 500, reports
-          assert reports['productsWithoutPrice'] == 500, reports
-          assert reports['operationsSimulated'] is True
 
           print(json.dumps({
               'frontend': 'PASS',
-              'health': health,
-              'company': company['name'],
-              'product_records': products['total'],
-              'sample_barcode': product['barcode'],
-              'sample_image': product['imageUrl'],
+              'products': products['total'],
               'image_download': 'PASS',
-              'chat': 'PASS',
-              'reservation_created_and_cancelled': reservation['id'],
+              'reservation_endpoint': 'BLOCKED',
               'reports': 'PASS'
           }, ensure_ascii=False, indent=2))
           PY

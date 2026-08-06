@@ -2,7 +2,7 @@ name: CI
 
 on:
   push:
-    branches: [main, feat/mvp-funcionario-virtual, feat/catalogo-real-anvisa, feat/catalogo-500-produtos-com-imagens]
+    branches: [main, feat/mvp-funcionario-virtual, feat/catalogo-real-anvisa, feat/catalogo-500-produtos-com-imagens, feat/medicamentos-imagens-oficiais-layout]
   pull_request:
     branches: [main]
 
@@ -28,17 +28,29 @@ jobs:
       - name: Independently validate 500 distinct products with images
         run: python scripts/validate_retail_catalog.py
 
-      - name: Validate frontend contract
+      - name: Validate safe frontend contract
         run: |
-          grep --quiet 'CATÁLOGO COM IDENTIDADE E IMAGEM REAL' public/index.html
+          grep --quiet 'PRODUTOS NÃO MEDICAMENTOSOS' public/index.html
+          grep --quiet 'Saúde, higiene e cuidados pessoais' public/index.html
           grep --quiet 'produtos distintos' public/index.html
-          grep --quiet 'unidades simuladas em estoque' public/index.html
-          grep --quiet 'images.openbeautyfacts.org' public/index.html
-          grep --quiet 'catalog-images-20260805-1' public/index.html
-          ! grep --quiet 'startup.js' public/index.html
-          grep --quiet 'product-image' public/app.js
-          grep --quiet 'stockUnitsSimulated' public/app.js
-          grep --quiet 'unidades simuladas disponíveis' public/app.js
+          grep --quiet 'unidades simuladas' public/index.html
+          grep --quiet 'layout-safe-20260806-2' public/index.html
+          grep --quiet 'product-image-wrap' public/app.js
+          grep --quiet 'product-details' public/app.js
+          grep --quiet 'Sem venda ou reserva' public/app.js
+          grep --quiet 'grid-template-rows: 230px 1fr' public/styles.css
+          grep --quiet 'object-fit: contain' public/styles.css
+          ! grep --quiet 'data-view="reservation"' public/index.html
+          ! grep --quiet 'reservation-form' public/index.html
+          ! grep --quiet 'Preparar reserva' public/index.html
+          ! grep --quiet 'chat-form' public/index.html
+          ! grep --quiet '/api/reservations' public/app.js
+
+      - name: Validate reservation lock migration
+        run: |
+          grep --quiet 'Reservas públicas foram desativadas' supabase/migrations/20260806183000_disable_public_reservations.sql
+          grep --quiet 'revoke all on function public.pfv_create_reservation' supabase/migrations/20260806183000_disable_public_reservations.sql
+          grep --quiet 'revoke all on function public.pfv_cancel_reservation' supabase/migrations/20260806183000_disable_public_reservations.sql
 
       - name: Test local MVP
         run: python -m unittest discover -s tests -v
@@ -72,4 +84,4 @@ jobs:
           assert product.get('anvisaRegistration') or product.get('barcode') or product.get('sku'), product
           print('LOCAL_SMOKE_PASS products=500 identity=real')
           PY
-          curl --fail --silent http://127.0.0.1:8000/ | grep --quiet 'CATÁLOGO COM IDENTIDADE E IMAGEM REAL'
+          curl --fail --silent http://127.0.0.1:8000/ | grep --quiet 'PRODUTOS NÃO MEDICAMENTOSOS'
