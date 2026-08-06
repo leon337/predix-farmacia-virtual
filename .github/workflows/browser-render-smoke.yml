@@ -2,7 +2,7 @@ name: Browser Render Smoke
 
 on:
   push:
-    branches: [fix/frontend-render-real-browser, main]
+    branches: [fix/frontend-render-real-browser, feat/medicamentos-imagens-oficiais-layout, main]
   pull_request:
     branches: [main]
   workflow_dispatch:
