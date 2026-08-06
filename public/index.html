@@ -6,8 +6,8 @@
   <meta name="description" content="Predix Farmácia Virtual — catálogo demonstrativo de produtos não medicamentosos de saúde e cuidados pessoais.">
   <meta http-equiv="Content-Security-Policy" content="default-src 'self'; connect-src 'self' https://qylqyhxpwffiripcpjej.supabase.co; style-src 'self'; script-src 'self'; img-src 'self' data: https://images.openbeautyfacts.org https://images.openfoodfacts.org https://images.openproductsfacts.org; object-src 'none'; base-uri 'none'; frame-ancestors 'none'">
   <title>Predix Farmácia Virtual</title>
-  <link rel="stylesheet" href="styles.css?v=layout-safe-20260806-1">
-  <script src="app.js?v=layout-safe-20260806-1" defer></script>
+  <link rel="stylesheet" href="styles.css?v=layout-safe-20260806-2">
+  <script src="app.js?v=layout-safe-20260806-2" defer></script>
 </head>
 <body>
   <header class="topbar">
@@ -25,7 +25,6 @@
 
   <nav class="tabs" aria-label="Áreas do sistema">
     <button class="tab active" data-view="catalog" type="button">Catálogo</button>
-    <button class="tab" data-view="chat" type="button">Atendimento informativo</button>
     <button class="tab" data-view="reports" type="button">Indicadores</button>
   </nav>
 
@@ -64,33 +63,6 @@
           <button id="next-page" type="button">Próxima</button>
         </div>
       </article>
-    </section>
-
-    <section id="view-chat" class="view" hidden>
-      <div class="two-columns">
-        <article class="panel">
-          <p class="eyebrow">FUNCIONÁRIO VIRTUAL</p>
-          <h2>Atendimento informativo</h2>
-          <div id="chat-log" class="chat-log" aria-live="polite">
-            <div class="message assistant">
-              <strong>Funcionário Virtual</strong>
-              <p>Posso localizar produtos não medicamentosos por nome, marca ou código de barras e informar dados demonstrativos do catálogo.</p>
-              <small>Não realizo reserva, venda, recomendação clínica ou orientação de uso.</small>
-            </div>
-          </div>
-          <form id="chat-form" class="inline-form">
-            <label class="sr-only" for="chat-input">Mensagem</label>
-            <input id="chat-input" maxlength="500" placeholder="Ex.: procure um sabonete ou código de barras" required>
-            <button type="submit">Enviar</button>
-          </form>
-        </article>
-
-        <aside class="panel">
-          <p class="eyebrow">SOBRE O AMBIENTE</p>
-          <h2>Dados demonstrativos</h2>
-          <div id="company-details" class="details"></div>
-        </aside>
-      </div>
     </section>
 
     <section id="view-reports" class="view" hidden>
