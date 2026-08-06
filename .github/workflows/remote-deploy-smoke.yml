@@ -2,7 +2,7 @@ name: Remote Deploy Smoke
 
 on:
   push:
-    branches: [feat/deploy-publico-auditavel, feat/catalogo-real-anvisa, fix/frontend-render-real-browser, main]
+    branches: [feat/deploy-publico-auditavel, feat/catalogo-real-anvisa, fix/frontend-render-real-browser, feat/medicamentos-imagens-oficiais-layout, main]
   pull_request:
     branches: [main]
   workflow_dispatch:
