@@ -30,7 +30,7 @@ function textElement(tag, text, className = '') {
 
 function placeholderImage(name) {
   const safeName = String(name || 'Produto').slice(0, 36).replace(/[<>&"']/g, '');
-  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="640" height="480" viewBox="0 0 640 480"><rect width="640" height="480" fill="#eef4ef"/><path d="M230 150h180v180H230z" fill="#d4e7da"/><path d="M265 190h110v100H265z" fill="#fff" stroke="#176b43" stroke-width="12"/><path d="M320 210v60M290 240h60" stroke="#176b43" stroke-width="15" stroke-linecap="round"/><text x="320" y="380" text-anchor="middle" font-family="Arial,sans-serif" font-size="24" fill="#0f5132">${safeName}</text></svg>`;
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="640" height="480" viewBox="0 0 640 480"><rect width="640" height="480" fill="#f5f8f6"/><path d="M230 150h180v180H230z" fill="#d4e7da"/><path d="M265 190h110v100H265z" fill="#fff" stroke="#176b43" stroke-width="12"/><path d="M320 210v60M290 240h60" stroke="#176b43" stroke-width="15" stroke-linecap="round"/><text x="320" y="380" text-anchor="middle" font-family="Arial,sans-serif" font-size="24" fill="#0f5132">${safeName}</text></svg>`;
   return `data:image/svg+xml;charset=UTF-8,${encodeURIComponent(svg)}`;
 }
 
@@ -70,11 +70,10 @@ async function loadCompany() {
     ['Endereço demonstrativo', company.address],
     ['Telefone demonstrativo', company.phone],
     ['Funcionamento', company.openingHours],
-    ['Pagamentos simulados', company.payments],
-    ['Entregas simuladas', company.delivery],
     ['Produtos cadastrados', `${health.distinctProducts} produtos distintos`],
     ['Imagens cadastradas', `${health.productsWithImages} produtos com imagem`],
-    ['Estoque demonstrativo', `${Number(health.stockUnitsSimulated).toLocaleString('pt-BR')} unidades simuladas distribuídas entre os produtos`],
+    ['Estoque demonstrativo', `${Number(health.stockUnitsSimulated).toLocaleString('pt-BR')} unidades simuladas`],
+    ['Operações públicas', 'Consulta informativa; sem venda ou reserva'],
   ].forEach(([label, value]) => {
     const item = document.createElement('div');
     item.append(textElement('strong', label), textElement('span', value));
@@ -109,10 +108,6 @@ document.querySelector('#chat-form').addEventListener('submit', async (event) =>
       body: JSON.stringify({ message, sessionId: state.sessionId }),
     });
     addMessage('assistant', result.message, result.sources || [], result.handoffRequired);
-    if (result.data?.product) {
-      document.querySelector('#reservation-product').value = result.data.product.id;
-      document.querySelector('#reservation-quantity').value = result.data.quantity || 1;
-    }
   } catch (error) {
     addMessage('assistant', `Falha controlada: ${error.message}`);
   } finally {
@@ -124,6 +119,7 @@ document.querySelector('#chat-form').addEventListener('submit', async (event) =>
 function productImage(product) {
   const wrap = document.createElement('div');
   wrap.className = 'product-image-wrap';
+
   const image = document.createElement('img');
   image.className = 'product-image';
   image.alt = `Imagem do produto ${product.name}`;
@@ -136,11 +132,18 @@ function productImage(product) {
     image.dataset.loadError = 'true';
     image.src = placeholderImage(product.name);
   }, { once: true });
+
   wrap.append(image);
   return wrap;
 }
 
-function productCard(product) {
+function detailRow(label, value) {
+  const row = document.createElement('div');
+  row.append(textElement('dt', label), textElement('dd', value || 'Não informado'));
+  return row;
+}
+
+function productCard(product, position) {
   const card = document.createElement('article');
   card.className = 'product-card';
   card.dataset.productId = String(product.id);
@@ -149,19 +152,24 @@ function productCard(product) {
 
   const body = document.createElement('div');
   body.className = 'product-card-body';
+
   const identity = product.barcode
     ? `GTIN ${product.barcode}`
     : product.anvisaRegistration
       ? `ANVISA ${product.anvisaRegistration}`
       : product.sku;
-  body.append(textElement('span', `${identity} • Produto ${product.id} de 500`, 'tag'));
-  body.append(textElement('h3', product.name));
-  body.append(textElement('p', `${product.category} • ${product.manufacturer}`));
-  body.append(textElement('p', `Apresentação: ${product.presentation}`));
 
-  if (product.barcode) body.append(textElement('p', `Código de barras: ${product.barcode}`));
-  if (product.anvisaRegistration) body.append(textElement('p', `Registro Anvisa: ${product.anvisaRegistration}`));
-  if (product.imageSource) body.append(textElement('p', `Imagem: ${product.imageSource}`, 'image-source'));
+  body.append(textElement('span', `${identity} • Produto ${position} de ${state.health?.distinctProducts ?? 500}`, 'tag'));
+  body.append(textElement('h3', product.name));
+  body.append(textElement('p', `${product.category || 'Categoria não informada'} • ${product.manufacturer || 'Fabricante não informado'}`, 'product-subtitle'));
+
+  const details = document.createElement('dl');
+  details.className = 'product-details';
+  details.append(detailRow('Apresentação', product.presentation));
+  if (product.barcode) details.append(detailRow('Código de barras', product.barcode));
+  if (product.anvisaRegistration) details.append(detailRow('Registro Anvisa', product.anvisaRegistration));
+  if (product.imageSource) details.append(detailRow('Fonte da imagem', product.imageSource));
+  body.append(details);
 
   const meta = document.createElement('div');
   meta.className = 'product-meta';
@@ -174,18 +182,8 @@ function productCard(product) {
     product.quantityAvailable > 0 ? 'stock-ok' : 'stock-zero',
   ));
   body.append(meta);
-  body.append(textElement('small', 'Cadastro do produto: real • Estoque e operação: simulados'));
+  body.append(textElement('small', 'Cadastro informativo • Estoque e operação simulados • Sem venda ou reserva', 'operation-note'));
 
-  const reserve = textElement('button', 'Preparar reserva simulada');
-  reserve.type = 'button';
-  reserve.disabled = product.quantityAvailable < 1;
-  reserve.addEventListener('click', () => {
-    document.querySelector('#reservation-product').value = product.id;
-    document.querySelector('#reservation-quantity').value = 1;
-    setView('reservation');
-    document.querySelector('#reservation-customer').focus();
-  });
-  body.append(reserve);
   card.append(body);
   return card;
 }
@@ -194,12 +192,15 @@ async function loadCatalog() {
   const query = encodeURIComponent(document.querySelector('#catalog-query').value.trim());
   const result = await api(`/api/products?query=${query}&page=${state.page}&pageSize=24`);
   state.totalPages = Math.max(1, result.totalPages);
+
   if (state.page > state.totalPages) {
     state.page = state.totalPages;
     return loadCatalog();
   }
+
   document.querySelector('#catalog-count').textContent = `${result.total} produtos distintos`;
-  document.querySelector('#catalog-grid').replaceChildren(...result.items.map(productCard));
+  const cards = result.items.map((product, index) => productCard(product, result.firstRecord + index));
+  document.querySelector('#catalog-grid').replaceChildren(...cards);
   document.querySelector('#page-status').textContent = `Produtos ${result.firstRecord}–${result.lastRecord} de ${result.total} • Página ${result.page} de ${state.totalPages}`;
   document.querySelector('#prev-page').disabled = state.page <= 1;
   document.querySelector('#next-page').disabled = state.page >= state.totalPages;
@@ -225,42 +226,13 @@ document.querySelector('#next-page').addEventListener('click', () => {
   }
 });
 
-function showResult(selector, message, error = false) {
-  const target = document.querySelector(selector);
-  target.textContent = message;
-  target.classList.toggle('error', error);
-}
-
-document.querySelector('#reservation-form').addEventListener('submit', async (event) => {
-  event.preventDefault();
-  const payload = {
-    customerName: document.querySelector('#reservation-customer').value.trim(),
-    items: [{
-      productId: Number(document.querySelector('#reservation-product').value),
-      quantity: Number(document.querySelector('#reservation-quantity').value),
-    }],
-  };
-  try {
-    const result = await api('/api/reservations', {
-      method: 'POST',
-      headers: { 'Idempotency-Key': crypto.randomUUID() },
-      body: JSON.stringify(payload),
-    });
-    const totalLine = result.totalCents === null || result.totalCents === undefined
-      ? 'Total: indisponível — preço comercial não cadastrado'
-      : `Total demonstrativo: R$ ${(result.totalCents / 100).toFixed(2).replace('.', ',')}`;
-    showResult('#reservation-result', `Reserva ${result.id}\nStatus: ${result.status}\nValidade: ${result.expiresAt}\n${totalLine}\nNenhuma venda ou cobrança foi realizada.`);
-  } catch (error) {
-    showResult('#reservation-result', error.message, true);
-  }
-});
-
 function buildTable(headers, rows) {
   const table = document.createElement('table');
   const head = document.createElement('thead');
   const headerRow = document.createElement('tr');
   headers.forEach((header) => headerRow.append(textElement('th', header)));
   head.append(headerRow);
+
   const body = document.createElement('tbody');
   rows.forEach((values) => {
     const row = document.createElement('tr');
@@ -279,16 +251,17 @@ async function loadReports() {
     ['Unidades simuladas', Number(report.stockUnitsSimulated || 0).toLocaleString('pt-BR')],
     ['Preços não cadastrados', report.productsWithoutPrice],
     ['Atendimentos', report.totalAttendances],
-    ['Reservas simuladas', report.reservations],
     ['Encaminhamentos', report.handoffs],
     ['Produtos sem estoque', report.outOfStockProducts],
   ];
+
   document.querySelector('#report-cards').replaceChildren(...cards.map(([label, value]) => {
     const card = document.createElement('div');
     card.className = 'report-card';
     card.append(textElement('span', label), textElement('strong', value));
     return card;
   }));
+
   const rows = (report.mostQueriedProducts || []).map((item) => [item.name, item.queries]);
   document.querySelector('#top-products').replaceChildren(buildTable(['Produto', 'Consultas'], rows));
 }
