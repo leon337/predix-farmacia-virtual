@@ -3,82 +3,61 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <meta name="description" content="Predix Farmácia Virtual — catálogo de 500 produtos reais com imagens em ambiente operacional demonstrativo.">
+  <meta name="description" content="Predix Farmácia Virtual — catálogo demonstrativo de produtos não medicamentosos de saúde e cuidados pessoais.">
   <meta http-equiv="Content-Security-Policy" content="default-src 'self'; connect-src 'self' https://qylqyhxpwffiripcpjej.supabase.co; style-src 'self'; script-src 'self'; img-src 'self' data: https://images.openbeautyfacts.org https://images.openfoodfacts.org https://images.openproductsfacts.org; object-src 'none'; base-uri 'none'; frame-ancestors 'none'">
   <title>Predix Farmácia Virtual</title>
-  <link rel="stylesheet" href="styles.css?v=catalog-images-20260805-1">
-  <script src="app.js?v=catalog-images-20260805-1" defer></script>
+  <link rel="stylesheet" href="styles.css?v=layout-safe-20260806-1">
+  <script src="app.js?v=layout-safe-20260806-1" defer></script>
 </head>
 <body>
   <header class="topbar">
     <div>
-      <p class="eyebrow">PREDIX AI • CATÁLOGO DE PRODUTOS</p>
+      <p class="eyebrow">PREDIX AI • CATÁLOGO DEMONSTRATIVO</p>
       <h1 id="company-name">Predix Farmácia Virtual</h1>
       <p id="company-status" class="status">Conectando ao PostgreSQL…</p>
     </div>
-    <span class="demo-badge">OPERAÇÃO SIMULADA</span>
+    <span class="demo-badge">AMBIENTE DE TESTE</span>
   </header>
 
   <div class="safety-banner" role="note">
-    Os produtos, marcas, códigos de barras e fotografias vêm de fontes reais. Empresa, estoque, reservas, pagamentos e entregas são simulados. Este sistema não vende medicamentos e não fornece orientação clínica.
+    Catálogo não medicamentoso de saúde e cuidados pessoais. Não há venda, reserva, pagamento, entrega ou orientação clínica.
   </div>
 
   <nav class="tabs" aria-label="Áreas do sistema">
-    <button class="tab" data-view="chat" type="button">Atendimento</button>
     <button class="tab active" data-view="catalog" type="button">Catálogo</button>
-    <button class="tab" data-view="reservation" type="button">Reserva</button>
-    <button class="tab" data-view="reports" type="button">Relatórios</button>
+    <button class="tab" data-view="chat" type="button">Atendimento informativo</button>
+    <button class="tab" data-view="reports" type="button">Indicadores</button>
   </nav>
 
   <main>
-    <section id="view-chat" class="view" hidden>
-      <div class="two-columns">
-        <article class="panel">
-          <p class="eyebrow">FUNCIONÁRIO VIRTUAL</p>
-          <h2>Balcão digital</h2>
-          <div id="chat-log" class="chat-log" aria-live="polite">
-            <div class="message assistant">
-              <strong>Funcionário Virtual</strong>
-              <p>Olá. Posso consultar produtos reais por nome, marca ou código de barras, além do estoque demonstrativo, horários e reservas simuladas. Preços comerciais não estão cadastrados.</p>
-              <small>Fonte: catálogo aberto de produtos e política do ambiente demonstrativo</small>
-            </div>
-          </div>
-          <form id="chat-form" class="inline-form">
-            <label class="sr-only" for="chat-input">Mensagem</label>
-            <input id="chat-input" maxlength="500" placeholder="Ex.: consulte um produto ou código de barras" required>
-            <button type="submit">Enviar</button>
-          </form>
-        </article>
-
-        <aside class="panel">
-          <p class="eyebrow">SOBRE A EMPRESA</p>
-          <h2>Dados operacionais demonstrativos</h2>
-          <div id="company-details" class="details"></div>
-        </aside>
-      </div>
-    </section>
-
     <section id="view-catalog" class="view active">
-      <article class="panel">
+      <article class="panel catalog-panel">
         <div class="section-heading">
           <div>
-            <p class="eyebrow">CATÁLOGO COM IDENTIDADE E IMAGEM REAL</p>
-            <h2>Produtos de farmácia e cuidados pessoais</h2>
+            <p class="eyebrow">PRODUTOS NÃO MEDICAMENTOSOS</p>
+            <h2>Saúde, higiene e cuidados pessoais</h2>
           </div>
           <span id="catalog-count" class="counter">Carregando…</span>
         </div>
-        <p class="status">Cada card representa um produto distinto. As quantidades exibidas dentro dos cards são unidades simuladas disponíveis daquele produto.</p>
+
+        <p class="catalog-intro">
+          Cada card representa um produto distinto. As imagens possuem uma área padronizada e as quantidades de estoque são apenas demonstrativas.
+        </p>
+
         <div class="catalog-summary" aria-label="Resumo do catálogo">
           <div><strong id="summary-products">—</strong><span>produtos distintos</span></div>
           <div><strong id="summary-images">—</strong><span>produtos com imagem</span></div>
-          <div><strong id="summary-stock">—</strong><span>unidades simuladas em estoque</span></div>
+          <div><strong id="summary-stock">—</strong><span>unidades simuladas</span></div>
         </div>
-        <form id="catalog-form" class="inline-form">
+
+        <form id="catalog-form" class="search-form">
           <label class="sr-only" for="catalog-query">Buscar no catálogo</label>
-          <input id="catalog-query" placeholder="Nome, marca, categoria, SKU ou código de barras">
+          <input id="catalog-query" placeholder="Nome, marca, categoria ou código de barras">
           <button type="submit">Buscar</button>
         </form>
+
         <div id="catalog-grid" class="catalog-grid" aria-live="polite"></div>
+
         <div class="pagination">
           <button id="prev-page" type="button">Anterior</button>
           <span id="page-status">Produtos 0–0 de 0</span>
@@ -87,25 +66,31 @@
       </article>
     </section>
 
-    <section id="view-reservation" class="view" hidden>
-      <article class="panel form-panel">
-        <p class="eyebrow">RESERVA SIMULADA</p>
-        <h2>Preparar uma reserva</h2>
-        <p class="status">A reserva é fictícia, não gera venda, cobrança ou entrega. O cadastro do produto é real; a quantidade de estoque é simulada.</p>
-        <form id="reservation-form" class="stack-form">
-          <label>Nome fictício
-            <input id="reservation-customer" maxlength="120" placeholder="Cliente demonstração" required>
-          </label>
-          <label>ID do produto
-            <input id="reservation-product" type="number" min="1" required>
-          </label>
-          <label>Quantidade de unidades simuladas
-            <input id="reservation-quantity" type="number" min="1" max="50" value="1" required>
-          </label>
-          <button type="submit">Criar reserva simulada</button>
-        </form>
-        <div id="reservation-result" class="result" aria-live="polite"></div>
-      </article>
+    <section id="view-chat" class="view" hidden>
+      <div class="two-columns">
+        <article class="panel">
+          <p class="eyebrow">FUNCIONÁRIO VIRTUAL</p>
+          <h2>Atendimento informativo</h2>
+          <div id="chat-log" class="chat-log" aria-live="polite">
+            <div class="message assistant">
+              <strong>Funcionário Virtual</strong>
+              <p>Posso localizar produtos não medicamentosos por nome, marca ou código de barras e informar dados demonstrativos do catálogo.</p>
+              <small>Não realizo reserva, venda, recomendação clínica ou orientação de uso.</small>
+            </div>
+          </div>
+          <form id="chat-form" class="inline-form">
+            <label class="sr-only" for="chat-input">Mensagem</label>
+            <input id="chat-input" maxlength="500" placeholder="Ex.: procure um sabonete ou código de barras" required>
+            <button type="submit">Enviar</button>
+          </form>
+        </article>
+
+        <aside class="panel">
+          <p class="eyebrow">SOBRE O AMBIENTE</p>
+          <h2>Dados demonstrativos</h2>
+          <div id="company-details" class="details"></div>
+        </aside>
+      </div>
     </section>
 
     <section id="view-reports" class="view" hidden>
@@ -113,7 +98,7 @@
         <div class="section-heading">
           <div>
             <p class="eyebrow">INDICADORES</p>
-            <h2>Relatórios do ambiente</h2>
+            <h2>Resumo do ambiente</h2>
           </div>
           <button id="refresh-reports" type="button">Atualizar</button>
         </div>
@@ -124,7 +109,7 @@
   </main>
 
   <footer>
-    Produtos, marcas, códigos de barras e imagens: fontes reais. Empresa, estoque, pessoas, reservas, pagamentos, entregas e operações: simulados.
+    Produtos e imagens vêm das fontes registradas no catálogo. Empresa, estoque e operações são demonstrativos. Não há venda ou reserva.
   </footer>
 </body>
 </html>
